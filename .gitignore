@@ -1,0 +1,25 @@
+.DS_Store
+
+venv/
+.venv/
+env/
+*.pyc
+
+.idea/
+.vscode/
+__pycache__/
+
+data/raw/*
+data/processed/* #
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+models/
+*.joblib
+*.pkl
+*.h5
+
+logs/
+nohup.out
+
+.ipynb_checkpoints
