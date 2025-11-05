@@ -4,6 +4,7 @@ venv/
 .venv/
 env/
 *.pyc
+__init__.py
 
 .idea/
 .vscode/
