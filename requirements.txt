@@ -1,0 +1,10 @@
+# Core ML libraries
+pandas
+numpy
+scikit-learn
+joblib                 # для сохранения/загрузки моделей
+
+# Web API and Server
+fastapi
+uvicorn[standard]
+pydantic
