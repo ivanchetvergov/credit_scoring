@@ -12,6 +12,7 @@ from sklearn.metrics import (
     confusion_matrix,
 )
 from sklearn.pipeline import Pipeline
+from lightgbm import LGBMClassifier
 
 from src.config import (
     MODELS_DIR,
@@ -46,7 +47,8 @@ class BaselineTrainer:
         """
         models = {
             'logistic_regression': LogisticRegression(**MODEL_PARAMS['logistic_regression']),
-            'random_forest': RandomForestClassifier(**MODEL_PARAMS['random_forest'])
+            'random_forest': RandomForestClassifier(**MODEL_PARAMS['random_forest']),
+            'lightgbm': LGBMClassifier(**MODEL_PARAMS['lightgbm'])
         }
 
         if self.model_name not in models:
@@ -115,7 +117,7 @@ class BaselineTrainer:
 
     def cross_validate(self, X, y):
         """Выполняет кросс-валидацию"""
-        logger.info(f"\nPerforming {CV_FOLDS}-fold cross-validation...")
+        logger.info(f"Performing {CV_FOLDS}-fold cross-validation...")
 
         cv = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=SEED)
 

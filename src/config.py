@@ -128,11 +128,26 @@ MODEL_PARAMS = {
         'class_weight': 'balanced'
     },
     'random_forest': {
-        'n_estimators': 200,
-        'max_depth': 10,
-        'min_samples_split': 42,
+        'n_estimators': 250,
+        'max_depth': 8,
+        'min_samples_split': 60,
         'random_state': SEED,
         'class_weight': 'balanced',
+        'n_jobs': -1
+    },
+    'lightgbm': {
+        'objective': 'binary',
+        'metric': 'auc',
+        'n_estimators': 2000,
+        'learning_rate': 0.025,
+        'num_leaves': 20,
+        'max_depth': 6,
+        'colsample_bytree': 0.8,
+        'subsample': 0.8,
+        'reg_alpha': 0.5,
+        'reg_lambda': 0.5,
+        'class_weight': 'balanced',
+        'random_state': SEED,
         'n_jobs': -1
     }
 }
