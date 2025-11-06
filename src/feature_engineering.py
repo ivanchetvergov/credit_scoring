@@ -161,7 +161,8 @@ def create_feature_store() -> pd.DataFrame:
 
     # --- 6 сохранение Feature Store ---
     PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    df_final.to_csv(FEATURE_STORE_PATH, index=False)
+    df_final.to_parquet(FEATURE_STORE_PATH, index=False)
+    # df_final.to_csv(FEATURE_STORE_PATH, index=False)
 
     logger.info("=" * 80)
     logger.info(f"Feature store created successfully!")
