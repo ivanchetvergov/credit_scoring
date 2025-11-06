@@ -42,7 +42,7 @@ class AnomalyHandler(BaseEstimator, TransformerMixin):
             # заменяем аномальные значения на NaN
             X.loc[X['DAYS_EMPLOYED'] == self.anomaly_value, 'DAYS_EMPLOYED'] = np.nan
 
-            logger.info(f"Anomaly handling: found {X['DAYS_EMPLOYED_ANOM'].sum()} anomalies")
+            logger.debug(f"Anomaly handling: found {X['DAYS_EMPLOYED_ANOM'].sum()} anomalies")
 
         return X
 
@@ -81,7 +81,7 @@ class FeatureCreator(BaseEstimator, TransformerMixin):
         if 'AMT_GOODS_PRICE' in X.columns and 'AMT_CREDIT' in X.columns:
             X['GOODS_PRICE_TO_CREDIT_RATIO'] = X['AMT_GOODS_PRICE'] / (X['AMT_CREDIT'] + 1)
 
-        logger.info(f"Feature creation complete. New shape: {X.shape}")
+        logger.debug(f"Feature creation complete. New shape: {X.shape}")
 
         return X
 
@@ -105,7 +105,7 @@ class FeatureSelector(BaseEstimator, TransformerMixin):
         if missing_features:
             logger.warning(f"Missing features: {missing_features[:5]}...")
 
-        logger.info(f"Selected {len(available_features)} features out of {len(self.feature_list)}")
+        logger.debug(f"Selected {len(available_features)} features out of {len(self.feature_list)}")
 
         return X[available_features]
 

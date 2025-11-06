@@ -21,7 +21,7 @@ def _aggregate_bureau_balance(df_bb: pd.DataFrame) -> pd.DataFrame:
     :param df_bb: Bureau Balance DataFrame
     :return: aggregated Bureau Balance DataFrame
     """
-    logger.info("Aggregating Bureau Balance features...")
+    logger.debug("Aggregating Bureau Balance features...")
 
     # --- 1 считаем частоту каждого статуса просрочки
     df_bb_agg = (
@@ -37,7 +37,7 @@ def _aggregate_bureau_balance(df_bb: pd.DataFrame) -> pd.DataFrame:
     # --- 3 добавляем длину кредитной истории
     df_bb_agg['BB_HISTORY_LENGTH'] = df_bb.groupby('SK_ID_BUREAU').size()
 
-    logger.info(f"Bureau Balance features created. Shape: {df_bb_agg.shape}")
+    logger.debug(f"Bureau Balance features created. Shape: {df_bb_agg.shape}")
     return df_bb_agg.reset_index()
 
 
@@ -49,12 +49,12 @@ def _aggregate_bureau(df_bureau: pd.DataFrame, df_bb_agg: pd.DataFrame) -> pd.Da
     :param df_bb_agg: Aggregated Bureau Balance DataFrame
     :return: Aggregated Bureau features at client level
     """
-    logger.info("Merging Bureau with Bureau Balance...")
+    logger.debug("Merging Bureau with Bureau Balance...")
 
     # слияние Bureau с Bureau Balance
     df_bureau = df_bureau.merge(df_bb_agg, on='SK_ID_BUREAU', how='left')
 
-    logger.info("Aggregating Bureau features to client level (SK_ID_CURR)...")
+    logger.debug("Aggregating Bureau features to client level (SK_ID_CURR)...")
 
     # выбираем только числовые колонки для агрегации
     num_cols = df_bureau.select_dtypes(include=np.number).columns.tolist()
@@ -77,7 +77,7 @@ def _aggregate_bureau(df_bureau: pd.DataFrame, df_bb_agg: pd.DataFrame) -> pd.Da
         for col in df_bureau_agg.columns
     ]
 
-    logger.info(f"Bureau aggregation complete. Created {len(df_bureau_agg.columns)} features")
+    logger.debug(f"Bureau aggregation complete. Created {len(df_bureau_agg.columns)} features")
 
     return df_bureau_agg.reset_index()
 
@@ -89,7 +89,7 @@ def _aggregate_previous_application(df_prev: pd.DataFrame) -> pd.DataFrame:
     :param df_prev: Previous Application DataFrame
     :return: Aggregated Previous Application features
     """
-    logger.info("Aggregating Previous Application features...")
+    logger.debug("Aggregating Previous Application features...")
 
     # выбираем числовые колонки
     num_cols = df_prev.select_dtypes(include=np.number).columns.tolist()
@@ -107,7 +107,7 @@ def _aggregate_previous_application(df_prev: pd.DataFrame) -> pd.DataFrame:
         for col in df_prev_agg.columns
     ]
 
-    logger.info(f"Previous Application aggregation complete. Created {len(df_prev_agg.columns)} features")
+    logger.debug(f"Previous Application aggregation complete. Created {len(df_prev_agg.columns)} features")
 
     return df_prev_agg.reset_index()
 
