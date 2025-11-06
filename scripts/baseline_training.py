@@ -59,7 +59,7 @@ def train_single_model(
     Обучает одну модель.
     """
     try:
-        logger.info(f"\n{'='*60}")
+        logger.info(f"{'='*60}")
         logger.info(f"Training model: {model_name}")
         logger.info(f"{'='*60}")
 

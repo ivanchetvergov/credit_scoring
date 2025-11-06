@@ -37,6 +37,8 @@ def compare_models(
                 'Test Precision': metrics['test']['precision'],
                 'Test Recall': metrics['test']['recall'],
                 'Test F1': metrics['test']['f1'],
+                'CV Mean': metrics.get('cv_mean', np.nan),
+                'CV Std': metrics.get('cv_std', np.nan),
                 'Overfit (Train-Test)': metrics['train']['roc_auc'] - metrics['test']['roc_auc']
             }
             for model_name, metrics in results.items()
@@ -66,7 +68,7 @@ def compare_models(
 
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         comparison_df.to_csv(save_path)
-        logger.info(f"\n✓ Comparison saved to: {save_path}")
+        logger.info(f" Comparison saved to: {save_path}")
 
         return comparison_df
 

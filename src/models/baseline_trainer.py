@@ -76,7 +76,7 @@ class BaselineTrainer:
         }
 
         model_class = models[self.model_name]
-        return model_class
+        return model_class(**self.model_params)
 
     @staticmethod
     def _calculate_metrics(
@@ -134,11 +134,11 @@ class BaselineTrainer:
             test_metrics = self._calculate_metrics(y_test, y_test_pred, y_test_probas)
 
             # сохраняем метрики
-            self.metrics = {
+            self.metrics.update({
                 'train': train_metrics,
                 'test': test_metrics,
                 'confusion_matrix': confusion_matrix(y_test, y_test_pred).tolist()
-            }
+            })
 
             # логируем результаты
             self._log_results()
@@ -200,11 +200,11 @@ class BaselineTrainer:
         logger.info(f"RESULTS FOR {self.model_name.upper()}")
         logger.info("=" * 80)
 
-        logger.info("\nTrain Metrics:")
+        logger.info("Train Metrics:")
         for metric, value in self.metrics['train'].items():
             logger.info(f"  {metric}: {value:.4f}")
 
-        logger.info("\nTest Metrics:")
+        logger.info("Test Metrics:")
         for metric, value in self.metrics['test'].items():
             logger.info(f"  {metric}: {value:.4f}")
 
@@ -213,7 +213,7 @@ class BaselineTrainer:
         test_auc = self.metrics['test']['roc_auc']
         overfit = train_auc - test_auc
 
-        logger.info(f"\nOverfitting check:")
+        logger.info(f"Overfitting check:")
         logger.info(f"  Train ROC-AUC: {train_auc:.4f}")
         logger.info(f"  Test ROC-AUC: {test_auc:.4f}")
         logger.info(f"  Difference: {overfit:.4f}")
@@ -238,14 +238,14 @@ class BaselineTrainer:
             RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
             # сохраняем модель
-            model_path = MODELS_DIR / f"{model_name}_pipeline.joblib"
+            model_path = SAVED_MODELS_DIR / f"{model_name}_pipeline.joblib"
             joblib.dump(pipeline, model_path)
-            logger.info(f"✓ Saved model pipeline to {model_path}")
+            logger.info(f"  Saved model pipeline to {model_path}")
 
             # сохраняем метрики
             metrics_path = RESULTS_DIR / f"{model_name}_metrics.joblib"
             joblib.dump(metrics, metrics_path)
-            logger.info(f"✓ Saved metrics to {metrics_path}")
+            logger.info(f"  Saved metrics to {metrics_path}")
 
             return model_path, metrics_path
 
