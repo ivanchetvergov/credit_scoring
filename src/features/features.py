@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from typing import List, Optional
 import logging
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.pipeline import Pipeline
@@ -10,7 +11,8 @@ from sklearn.compose import ColumnTransformer
 from src.config import (
     NUMERICAL_FEATURES,
     CATEGORICAL_FEATURES,
-    BIN_CATEGORICAL_FEATURES
+    BIN_CATEGORICAL_FEATURES,
+    MAX_CATEGORIES_FOR_OHE
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -28,6 +30,7 @@ class AnomalyHandler(BaseEstimator, TransformerMixin):
 
     def __init__(self, anomaly_value=365243):
         self.anomaly_value = anomaly_value
+        self.n_anomalies_ = 0
 
     def fit(self, X, y=None):
         return self
@@ -38,11 +41,14 @@ class AnomalyHandler(BaseEstimator, TransformerMixin):
         if 'DAYS_EMPLOYED' in X.columns:
             # индикатор аномалии (безработный/неизвестно)
             X['DAYS_EMPLOYED_ANOM'] = (X['DAYS_EMPLOYED'] == self.anomaly_value).astype(int)
+            self.n_anomalies_ = X['DAYS_EMPLOYED_ANOM'].sum()
 
             # заменяем аномальные значения на NaN
             X.loc[X['DAYS_EMPLOYED'] == self.anomaly_value, 'DAYS_EMPLOYED'] = np.nan
 
             logger.debug(f"Anomaly handling: found {X['DAYS_EMPLOYED_ANOM'].sum()} anomalies")
+        else:
+            logger.warning("Column 'DAYS_EMPLOYED' not found in DataFrame")
 
         return X
 
@@ -50,38 +56,50 @@ class AnomalyHandler(BaseEstimator, TransformerMixin):
 class FeatureCreator(BaseEstimator, TransformerMixin):
     """
     Создает новые, полезные признаки на основе существующих.
+    Создаваемые признаки:
+    - CREDIT_INCOME_RATIO: отношение кредита к доходу
+    - ANNUITY_INCOME_RATIO: отношение аннуитета к доходу
+    - AGE_YEARS: возраст клиента в годах
+    - EMPLOYMENT_YEARS: стаж работы в годах
+    - GOODS_PRICE_TO_CREDIT_RATIO: отношение стоимости товара к кредиту
     """
-    def __init__(self):
-        pass
+    def __init__(self, epsilon: float = 1.0):
+        self.epsilon = epsilon
+        self.created_features_: List[str] = []
 
-    def fit(self, X, y=None):
+    def fit(self, X: pd.DataFrame, y=None) -> 'FeatureCreator':
         return self
 
-    @staticmethod
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         X = X.copy()
+        self.created_features_ = []
 
         # 1 отношение кредита к доходу (credit burden)
         if 'AMT_CREDIT' in X.columns and 'AMT_INCOME_TOTAL' in X.columns:
             X['CREDIT_INCOME_RATIO'] = X['AMT_CREDIT'] / (X['AMT_INCOME_TOTAL'] + 1)
+            self.created_features_.append('CREDIT_INCOME_RATIO')
 
         # 2 отношение аннуитета к доходу (payment burden)
         if 'AMT_ANNUITY' in X.columns and 'AMT_INCOME_TOTAL' in X.columns:
             X['ANNUITY_INCOME_RATIO'] = X['AMT_ANNUITY'] / (X['AMT_INCOME_TOTAL'] + 1)
+            self.created_features_.append('ANNUITY_INCOME_RATIO')
 
         # 3 возраст клиента в годах
         if 'DAYS_BIRTH' in X.columns:
             X['AGE_YEARS'] = (X['DAYS_BIRTH'] / -365).round(1)
+            self.created_features_.append('AGE_YEARS')
 
         # 4 стаж работы в годах
         if 'DAYS_EMPLOYED' in X.columns:
             X['EMPLOYMENT_YEARS'] = (X['DAYS_EMPLOYED'] / -365).clip(lower=0).round(1)
+            self.created_features_.append('EMPLOYMENT_YEARS')
 
         # 5 отношение стоимости товара к кредиту
         if 'AMT_GOODS_PRICE' in X.columns and 'AMT_CREDIT' in X.columns:
             X['GOODS_PRICE_TO_CREDIT_RATIO'] = X['AMT_GOODS_PRICE'] / (X['AMT_CREDIT'] + 1)
+            self.created_features_.append('GOODS_PRICE_TO_CREDIT_RATIO')
 
-        logger.debug(f"Feature creation complete. New shape: {X.shape}")
+        logger.debug(f"Feature creation complete. Created {len(self.created_features_)}.")
 
         return X
 
@@ -89,25 +107,35 @@ class FeatureCreator(BaseEstimator, TransformerMixin):
 class FeatureSelector(BaseEstimator, TransformerMixin):
     """
     Выбирает только нужные признаки для модели.
+
+    :param feature_list: List[str] Список признаков для выбора
+    :param raise_on_missing: bool Вызывать ли ошибку при отсутствии признаков (по умолчанию False)
     """
 
-    def __init__(self, feature_list):
+    def __init__(self, feature_list: List[str], raise_on_missing: bool = False):
         self.feature_list = feature_list
+        self.raise_on_missing = raise_on_missing
+        self.available_features_: List[str] = []
+        self.missing_features_: List[str] = []
 
-    def fit(self, X, y=None):
+    def fit(self, X: pd.DataFrame, y=None) -> 'FeatureSelector':
+        # проверяем какие признаки есть в данных
+        self.available_features_ = [f for f in self.feature_list if f in X.columns]
+        self.missing_features_ = [f for f in self.feature_list if f not in X.columns]
+
+        if self.missing_features_:
+            msg = f"Missing {len(self.missing_features_)} features: {self.missing_features_[:5]}"
+            if self.raise_on_missing:
+                raise ValueError(msg)
+            else:
+                logger.warning(msg)
+
+        logger.debug(f"Selected {len(self.available_features_)} features out of {len(self.feature_list)}")
+
         return self
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        # проверяем какие признаки есть в данных
-        available_features = [f for f in self.feature_list if f in X.columns]
-        missing_features = [f for f in self.feature_list if f not in X.columns]
-
-        if missing_features:
-            logger.warning(f"Missing features: {missing_features[:5]}...")
-
-        logger.debug(f"Selected {len(available_features)} features out of {len(self.feature_list)}")
-
-        return X[available_features]
+        return X[self.available_features_]
 
 
 # ========================== #
@@ -117,7 +145,7 @@ class FeatureSelector(BaseEstimator, TransformerMixin):
 def get_numerical_transformer() -> Pipeline:
     """
     Создает пайплайн для обработки числовых признаков.
-    :return: Pipeline для числовых признаков
+    :return: Pipeline для числовых признаков: imputer -> scaler
     """
     return Pipeline(
         steps=[
@@ -127,15 +155,24 @@ def get_numerical_transformer() -> Pipeline:
     )
 
 
-def get_categorical_transformer() -> Pipeline:
+def get_categorical_transformer(max_categories: Optional[int] = None) -> Pipeline:
     """
     Создает пайплайн для обработки категориальных признаков.
+    :param max_categories: макс. кол-во категорий для OHE
     :return: Pipeline для категориальных признаков
     """
+    if max_categories is None:
+        max_categories = MAX_CATEGORIES_FOR_OHE
+
     return Pipeline(
         steps=[
             ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
-            ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False, drop='first'))
+            ('onehot', OneHotEncoder(
+                handle_unknown='ignore',
+                sparse_output=False,
+                drop='first',
+                max_categories=max_categories
+            ))
         ]
     )
 
@@ -164,8 +201,7 @@ def get_full_preprocessor() -> ColumnTransformer:
             ('cat', get_categorical_transformer(), CATEGORICAL_FEATURES),
             ('bin', get_binary_transformer(), BIN_CATEGORICAL_FEATURES)
         ],
-        # remainder='drop',  # удаляем все остальные колонки
-        remainder=get_numerical_transformer(),
+        remainder='drop',  # удаляем все остальные колонки
         verbose_feature_names_out=False
     )
 
@@ -175,7 +211,7 @@ def get_full_preprocessor() -> ColumnTransformer:
 def get_preprocessing_pipeline(with_feature_engineering=True) -> Pipeline:
     """
     Создает полный пайплайн препроцессинга для sklearn моделей.
-    :param with_feature_engineering: Включать ли feature engineering
+    :param with_feature_engineering: Включать ли feature engineering (default=True)
     :return: Pipeline
     """
     steps = []
@@ -261,38 +297,59 @@ def analyze_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     return missing_stats
 
 
+def validate_features(df: pd.DataFrame, required_features: List[str]) -> bool:
+    """
+    Проверяет наличие всех необходимых признаков в DataFrame.
+
+    :param df: pd.DataFrame для проверки
+    :param required_features: List[str] cписок необходимых признаков
+    :return: bool. True если все признаки присутствуют, иначе False
+    """
+    missing = [f for f in required_features if f not in df.columns]
+
+    if missing:
+        logger.error(f"Missing required features: {missing}")
+        return False
+
+    logger.info(f"All {len(required_features)} required features are present")
+    return True
+
+
 if __name__ == '__main__':
-    from src.config import FEATURE_STORE_PATH, BASE_FEATURES
+    from src.config import FEATURE_STORE_PATH
 
     logger.info("Testing preprocessing pipeline...")
 
-    # загружаем данные
+    try:
+        # загружаем данные
+        df = pd.read_parquet(FEATURE_STORE_PATH)
+        logger.info(f"Loaded feature store with shape: {df.shape}")
 
-    df = pd.read_parquet(FEATURE_STORE_PATH)
+        # анализируем пропуски
+        print("\n" + "=" * 80)
+        print("MISSING VALUES ANALYSIS")
+        print("=" * 80)
 
-    # используем только признаки, которые уже существуют в загруженном DataFrame ---
-    present_base_features = [f for f in BASE_FEATURES if f in df.columns]
+        missing_df = analyze_missing_values(df, top_n=20)
+        print(missing_df)
 
-    # анализируем пропуски
-    print("\n" + "=" * 80)
-    print("MISSING VALUES ANALYSIS")
-    print("=" * 80)
+        # тестируем пайплайн
+        pipeline = get_preprocessing_pipeline()
 
-    # используем отфильтрованный список признаков:
-    missing_df = analyze_missing_values(df[present_base_features])
-    print(missing_df.head(20))
+        print("\n" + "=" * 80)
+        print("TESTING PIPELINE")
+        print("=" * 80)
 
-    # тестируем пайплайн
-    pipeline = get_preprocessing_pipeline()
+        # берем небольшую выборку для теста
+        sample = df.head(1000)
+        transformed = pipeline.fit_transform(sample)
 
-    print("\n" + "=" * 80)
-    print("TESTING PIPELINE")
-    print("=" * 80)
+        print(f"\nOriginal shape: {sample.shape}")
+        print(f"Transformed shape: {transformed.shape}")
+        print(f"\nPipeline test completed successfully!")
 
-    # берем небольшую выборку для теста
-    sample = df.head(1000)
-    transformed = pipeline.fit_transform(sample)
-
-    print(f"\nOriginal shape: {sample.shape}")
-    print(f"Transformed shape: {transformed.shape}")
-    print(f"\nPipeline test completed successfully!")
+    except FileNotFoundError:
+        logger.error(f"Feature store not found at {FEATURE_STORE_PATH}")
+        logger.info("Please run feature_engineering.py first")
+    except Exception as e:
+        logger.error(f"Error during pipeline testing: {e}", exc_info=True)
