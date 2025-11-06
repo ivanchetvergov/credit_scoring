@@ -1,9 +1,9 @@
 import pandas as pd
 import logging
-from sklearn.model_selection import train_test_split
+import argparse
 from pathlib import Path
 import sys
-import argparse
+from typing import List, Dict, Any
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
@@ -16,78 +16,180 @@ from src.config import (
 )
 from src.models.baseline_trainer import BaselineTrainer
 from src.reporting.compare_models import compare_models
+from sklearn.model_selection import train_test_split
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
+
+
+def prepare_data(df: pd.DataFrame) -> tuple:
+    """
+    Подготавливает данные для обучения.
+    """
+    logger.info("Preparing data for training...")
+
+    # разделение на признаки и таргет
+    X = df.drop(columns=[TARGET_COLUMN, ID_COLUMN], axis=1)
+    y = df[TARGET_COLUMN]
+
+    logger.info(f"Features shape: {X.shape}")
+    logger.info(f"Target shape: {y.shape}")
+
+    # используем Stratify для несбалансированного таргета
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y,
+        test_size=TEST_SIZE,
+        stratify=y,
+        random_state=SEED
+    )
+
+    logger.info(f"Train set: {X_train.shape}, positive rate: {y_train.mean():.4f}")
+    logger.info(f"Test set: {X_test.shape}, positive rate: {y_test.mean():.4f}")
+
+    return X_train, X_test, y_train, y_test
+
+def train_single_model(
+    model_name: str, X_train, y_train,
+    X_test, y_test, run_cv: bool = True
+) -> Dict[str, Any]:
+    """
+    Обучает одну модель.
+    """
+    try:
+        logger.info(f"\n{'='*60}")
+        logger.info(f"Training model: {model_name}")
+        logger.info(f"{'='*60}")
+
+        trainer = BaselineTrainer(model_name=model_name)
+
+        # кросс-валидация (опционально)
+        if run_cv:
+            trainer.cross_validate(X_train, y_train)
+
+        # обучение и оценка
+        final_pipeline, metrics = trainer.train(X_train, y_train, X_test, y_test)
+
+        # сохраняем
+        BaselineTrainer.save_model(final_pipeline, model_name, metrics)
+
+        return metrics
+
+    except ValueError as e:
+        logger.error(f"Validation error for model {model_name}: {str(e)}")
+        raise
+    except Exception as e:
+        logger.error(f"Training failed for model {model_name}: {str(e)}", exc_info=True)
+        raise
+
+
+def train_all_models(
+    models_to_run: List[str], X_train, y_train,
+    X_test, y_test, run_cv: bool = True
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Обучает несколько моделей.
+    """
+    all_results = {}
+    failed_models = []
+
+    for model_name in models_to_run:
+        try:
+            metrics = train_single_model(
+                model_name, X_train, y_train, X_test, y_test, run_cv
+            )
+            all_results[model_name] = metrics
+
+        except Exception as e:
+            logger.error(f"Model {model_name} failed and will be skipped")
+            failed_models.append(model_name)
+
+    if failed_models:
+        logger.warning(f"Failed models: {failed_models}")
+
+    return all_results
+
 
 def train():
     """
-    Главный скрипт для запуска обучения
-    Позволяет выбрать модель для запуска через аргумент командной строки
+    Главный скрипт для запуска обучения.
+    Позволяет выбрать модели для запуска через аргумент командной строки.
     """
     parser = argparse.ArgumentParser(
-        description= "Run the baseline ML training baseline"
+        description="Run the baseline ML training pipeline"
     )
     parser.add_argument(
         'models',
         nargs='*',
         default=['logistic_regression', 'random_forest'],
-        help='List of models to train (e.g., logistic_regression random_forest).'
+        help='List of models to train (e.g., logistic_regression random_forest lightgbm)'
+    )
+    parser.add_argument(
+        '--no-cv',
+        action='store_true',
+        help='Skip cross-validation'
+    )
+    parser.add_argument(
+        '--no-compare',
+        action='store_true',
+        help='Skip model comparison'
     )
     args = parser.parse_args()
 
     models_to_run = args.models
+    run_cv = not args.no_cv
+    run_compare = not args.no_compare
 
-    logger.info("=" * 60)
-    logger.info(f"starting training pipeline for models: {', '.join(models_to_run)}")
-    logger.info("=" * 60)
+    logger.info("=" * 80)
+    logger.info(f"STARTING TRAINING PIPELINE")
+    logger.info("=" * 80)
+    logger.info(f"Models to train: {', '.join(models_to_run)}")
+    logger.info(f"Cross-validation: {'enabled' if run_cv else 'disabled'}")
+    logger.info(f"Model comparison: {'enabled' if run_compare else 'disabled'}")
+    logger.info("=" * 80)
 
-    # 1 загрузка данных
+    # --- 1. загрузка данных ---
     try:
+        logger.info(f"Loading feature store from: {FEATURE_STORE_PATH}")
         df = pd.read_parquet(FEATURE_STORE_PATH)
-        logger.info(f"feature store loaded. shape: {df.shape}")
+        logger.info(f"Feature store loaded. Shape: {df.shape}")
     except FileNotFoundError:
-        logger.info(f"feature store was not found at {FEATURE_STORE_PATH}. run feature_engineering first.")
+        logger.error(
+            f"Feature store not found at {FEATURE_STORE_PATH}. "
+            f"Please run feature_engineering.py first."
+        )
+        return
+    except Exception as e:
+        logger.error(f"Error loading feature store: {e}", exc_info=True)
         return
 
-    # 2 разделение данных
-    X = df.drop(columns=[TARGET_COLUMN, ID_COLUMN], axis=1)
-    y = df[TARGET_COLUMN]
+    # --- 2. подготовка данных ---
+    try:
+        X_train, X_test, y_train, y_test = prepare_data(df)
+    except Exception as e:
+        logger.error(f"Error preparing data: {e}", exc_info=True)
+        return
 
-    # используем Stratify для несбаланс таргета
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=TEST_SIZE, stratify=y, random_state=SEED
+    # --- 3. обучение моделей ---
+    all_results = train_all_models(
+        models_to_run, X_train, y_train, X_test, y_test, run_cv
     )
-    logger.info(f"data split: train {X_train.shape}, test {X_test.shape}")
 
-    # 3 цикл обучения и сбора результатов
-    all_results = {}
-
-    for model_name in models_to_run:
+    # --- 4. сравнение моделей ---
+    if all_results and run_compare:
         try:
-            trainer = BaselineTrainer(model_name=model_name)
-
-            # кросс валидация
-            trainer.cross_validate(X_train, y_train)
-
-            # обучение и оценка
-            final_pipeline, metrics = trainer.train(X_train, y_train, X_test, y_test)
-
-            # сохраняем
-            BaselineTrainer.save_model(final_pipeline, model_name, metrics)
-
-            all_results[model_name] = metrics
-
-        except ValueError as e:
-            logger.error(f"Skipping model {model_name} failed. {str(e)}")
+            compare_models(all_results)
         except Exception as e:
-            logger.error(f"Model {model_name} failed. {str(e)}")
+            logger.error(f"Error comparing models: {e}", exc_info=True)
+    elif not all_results:
+        logger.warning("No models were successfully trained for comparison.")
 
-    # 4 сравнение
-    if all_results:
-        compare_models(all_results)
-    else:
-        logger.warning(f"No models were sucessfuly trained for compare.")
+    logger.info("=" * 80)
+    logger.info("TRAINING PIPELINE COMPLETED")
+    logger.info("=" * 80)
+
 
 if __name__ == "__main__":
     train()
