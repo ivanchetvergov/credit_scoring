@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # директории для хранения данных, моделей и результатов
 DATA_DIR = BASE_DIR / 'data' / "raw"
 PROCESSED_DATA_DIR = BASE_DIR / 'data' / "processed"
-MODELS_DIR = BASE_DIR / 'models'
+MODELS_DIR = BASE_DIR / 'saved_models'
 RESULTS_DIR = BASE_DIR / 'results'
 
 # основной файл данных
@@ -117,3 +117,23 @@ BASE_FEATURES = (
 # =============================== #
 
 SEED = 42
+TEST_SIZE = 0.25
+CV_FOLDS = 5
+
+# параметры для разных моделей
+MODEL_PARAMS = {
+    'logistic_regression': {
+        'max_iter': 1000,
+        'random_state': SEED,
+        'class_weight': 'balanced'
+    },
+    'random_forest': {
+        'n_estimators': 200,
+        'max_depth': 10,
+        'min_samples_split': 42,
+        'random_state': SEED,
+        'class_weight': 'balanced',
+        'n_jobs': -1
+    }
+}
+
