@@ -15,7 +15,7 @@ data/processed/* #
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 
-models/
+saved_models/
 *.joblib
 *.pkl
 *.h5
