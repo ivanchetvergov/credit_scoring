@@ -22,14 +22,6 @@ def generate_feature_lists(df: pd.DataFrame):
     categorical_cols = X_data.select_dtypes(include=['object']).columns.tolist()
 
     # 3. Дополнительная фильтрация: Бинарные
-    # Определяем бинарные колонки. Включаем только исходные,
-    # а не агрегации, которые могут быть 0.0 или 1.0 (float)
-
-    # Сначала используем список исходных бинарных фичей (если он у вас есть)
-    # Если нет, оставим их в numerical, а затем вручную переместим.
-
-    # Для простоты и избежания NaN/Float:
-    # Ищем фичи с небольшим количеством уникальных значений
     bin_categorical_cols = []
 
     # Пройдемся по числовым, ища бинарные (0, 1)
@@ -37,8 +29,7 @@ def generate_feature_lists(df: pd.DataFrame):
     for col in numerical_cols:
         # Проверка: только два уникальных значения (0 и 1), без учета NaN
         if X_data[col].nunique(dropna=True) == 2:
-            # Если это исходная бинарная фича (не OHE и не агрегация),
-            # перемещаем в BIN_CATEGORICAL_FEATURES
+            # Если это исходная бинарная фича (не OHE и не агрегация)
             if X_data[col].min() in [0, 1] and X_data[col].max() in [0, 1]:
                 bin_categorical_cols.append(col)
                 temp_numerical.remove(col)
