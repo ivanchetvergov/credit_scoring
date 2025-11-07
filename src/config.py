@@ -36,7 +36,10 @@ MODEL_PATH = SAVED_MODELS_DIR / MODEL_PIPELINE_NAME
 #  2 определение признаков  #
 # ========================= #
 
-from configs.features_config import ( # <--- НОВЫЙ ИМПОРТ
+TARGET_COLUMN = "TARGET"
+ID_COLUMN = "SK_ID_CURR"
+
+from configs.features_config import (
     NUMERICAL_FEATURES,
     CATEGORICAL_FEATURES,
     BIN_CATEGORICAL_FEATURES,
