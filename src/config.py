@@ -36,97 +36,10 @@ MODEL_PATH = SAVED_MODELS_DIR / MODEL_PIPELINE_NAME
 #  2 определение признаков  #
 # ========================= #
 
-TARGET_COLUMN = "TARGET"
-ID_COLUMN = "SK_ID_CURR"
-
-# --- признаки из application_train.csv (исходные) ---
-
-# числовые признаки
-BASE_NUMERICAL_FEATURES = [
-    "AMT_INCOME_TOTAL",
-    "AMT_CREDIT",
-    "AMT_ANNUITY",
-    "AMT_GOODS_PRICE",
-    "EXT_SOURCE_2",
-    "EXT_SOURCE_3",
-    "DAYS_BIRTH",
-    "DAYS_EMPLOYED",
-    "DAYS_REGISTRATION",
-    "DAYS_ID_PUBLISH",
-    "CNT_FAM_MEMBERS",
-    "REGION_POPULATION_RELATIVE",
-]
-
-# созданные числовые признаки (feature engineering)
-ENGINEERED_NUMERICAL_FEATURES = [
-    "CREDIT_INCOME_RATIO",
-    "ANNUITY_INCOME_RATIO",
-    "AGE_YEARS",
-    "EMPLOYMENT_YEARS",
-    "GOODS_PRICE_TO_CREDIT_RATIO",
-]
-
-# все числовые признаки
-NUMERICAL_FEATURES = BASE_NUMERICAL_FEATURES + ENGINEERED_NUMERICAL_FEATURES
-
-# категориальные признаки (catboost будет работать с ними как с текстом)
-CATEGORICAL_FEATURES = [
-    "NAME_CONTRACT_TYPE",
-    "CODE_GENDER",
-    "FLAG_OWN_CAR",
-    "FLAG_OWN_REALTY",
-    "CNT_CHILDREN",
-    "NAME_TYPE_SUITE",
-    "NAME_INCOME_TYPE",
-    "NAME_EDUCATION_TYPE",
-    "NAME_FAMILY_STATUS",
-    "NAME_HOUSING_TYPE",
-    "REGION_RATING_CLIENT",
-    "REGION_RATING_CLIENT_W_CITY",
-    "ORGANIZATION_TYPE",
-    "OCCUPATION_TYPE",
-    "WEEKDAY_APPR_PROCESS_START",
-    "HOUR_APPR_PROCESS_START",
-    "EMERGENCYSTATE_MODE",
-    "FONDKAPREMONT_MODE",
-    "HOUSETYPE_MODE",
-    "WALLSMATERIAL_MODE",
-]
-
-# базовые бинарные признаки
-BASE_BIN_CATEGORICAL_FEATURES = [
-    "LIVE_REGION_NOT_WORK_REGION",
-    "REG_CITY_NOT_LIVE_CITY",
-    "FLAG_DOCUMENT_3",
-    "FLAG_PHONE",
-    "FLAG_EMAIL",
-    "REG_REGION_NOT_LIVE_REGION",
-    "LIVE_CITY_NOT_WORK_CITY",
-]
-
-# созданные бинарные признаки
-ENGINEERED_BIN_FEATURES = [
-    "DAYS_EMPLOYED_ANOM"
-]
-
-# все бинарные признаки
-BIN_CATEGORICAL_FEATURES = BASE_BIN_CATEGORICAL_FEATURES + ENGINEERED_BIN_FEATURES
-
-
-# --- финальные списки признаков ---
-
-# признаки до feature engineering (для начальной загрузки)
-INPUT_FEATURES = (
-    BASE_NUMERICAL_FEATURES +
-    CATEGORICAL_FEATURES +
-    BASE_BIN_CATEGORICAL_FEATURES
-)
-
-# все признаки после feature engineering (для обучения моделей)
-BASE_FEATURES = (
-    NUMERICAL_FEATURES +
-    CATEGORICAL_FEATURES +
-    BIN_CATEGORICAL_FEATURES
+from configs.features_config import ( # <--- НОВЫЙ ИМПОРТ
+    NUMERICAL_FEATURES,
+    CATEGORICAL_FEATURES,
+    BIN_CATEGORICAL_FEATURES,
 )
 
 # =============================== #
@@ -168,7 +81,7 @@ MODEL_PARAMS = {
         'reg_lambda': 0.1,
         'colsample_bytree': 0.8,
         'subsample': 0.8,
-        'max_depth': 6,
+        'max_depth': 6
     }
 }
 
