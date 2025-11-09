@@ -24,7 +24,7 @@ from src.config import (
     CV_FOLDS,
     MODEL_PARAMS
 )
-from src.features.features import get_preprocessing_pipeline
+from src.features.pipelines import get_preprocessing_pipeline
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
