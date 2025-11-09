@@ -88,3 +88,26 @@ class FeatureCreator(BaseEstimator, TransformerMixin):
         logger.debug(f"Feature creation complete. Created {len(self.created_features_)}.")
 
         return X
+
+
+class DataFrameCoercer(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        from src.config import CATEGORICAL_FEATURES, BIN_CATEGORICAL_FEATURES
+        self.non_numeric_cols = CATEGORICAL_FEATURES + BIN_CATEGORICAL_FEATURES
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        X_out = X.copy()
+        for col in X_out.columns:
+            if col not in self.non_numeric_cols:
+                X_out[col] = pd.to_numeric(X_out[col], errors='coerce')
+            else:
+                # если бинарный признак содержит 'Y'/'N'
+                X_out[col] = (
+                    X_out[col]
+                    .replace({'Y': 1, 'N': 0, 'y': 1, 'n': 0})
+                    # .fillna(0)
+                )
+        return X_out

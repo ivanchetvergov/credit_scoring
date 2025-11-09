@@ -7,7 +7,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 
-from src.features.custom_transformers import AnomalyHandler, FeatureCreator
+from src.features.custom_transformers import AnomalyHandler, FeatureCreator, DataFrameCoercer
 
 from src.config import (
     NUMERICAL_FEATURES,
@@ -99,8 +99,9 @@ def get_preprocessing_pipeline(with_feature_engineering=True) -> Pipeline:
 
     if with_feature_engineering:
         steps.extend([
+            ('coercer_pre', DataFrameCoercer()),
             ('anomaly_handler', AnomalyHandler()),
-            ('feature_creator', FeatureCreator())
+            ('feature_creator', FeatureCreator()),
         ])
 
     steps.append(('preprocessor', get_full_preprocessor()))
