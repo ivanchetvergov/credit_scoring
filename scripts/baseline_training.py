@@ -7,11 +7,15 @@ from typing import List, Dict, Any
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
+import warnings
+warnings.filterwarnings(action='ignore')
+
 from src.config import (
     FEATURE_STORE_PATH,
     TARGET_COLUMN,
     ID_COLUMN,
     SEED,
+    NUMERICAL_FEATURES,
     TEST_SIZE
 )
 from src.models.baseline_trainer import BaselineTrainer
@@ -30,6 +34,10 @@ def prepare_data(df: pd.DataFrame) -> tuple:
     Подготавливает данные для обучения.
     """
     logger.info("Preparing data for training...")
+
+    for col in NUMERICAL_FEATURES:
+        # errors='coerce' заменит все нечисловые строки на NaN
+        df[col] = pd.to_numeric(df[col], errors='coerce')
 
     # разделение на признаки и таргет
     X = df.drop(columns=[TARGET_COLUMN, ID_COLUMN], axis=1)
@@ -123,7 +131,7 @@ def train():
     parser.add_argument(
         'models',
         nargs='*',
-        default=['logistic_regression', 'random_forest'],
+        default=['logistic_regression', 'random_forest', 'lightgbm'],
         help='List of models to train (e.g., logistic_regression random_forest lightgbm)'
     )
     parser.add_argument(
