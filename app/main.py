@@ -1,15 +1,10 @@
 # app/main.py
 
-import os
-import joblib
-import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException
-from typing import Dict, Any
-from pathlib import Path
+from typing import Dict
 from datetime import datetime
 
-from src.config import MODEL_PIPELINE_NAME
 from src.models.baseline_trainer import BaselineTrainer
 from app.schemas import PredictionRequest, PredictionResponse
 
