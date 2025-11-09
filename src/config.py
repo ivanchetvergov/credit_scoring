@@ -39,7 +39,15 @@ MODEL_PATH = SAVED_MODELS_DIR / MODEL_PIPELINE_NAME
 TARGET_COLUMN = "TARGET"
 ID_COLUMN = "SK_ID_CURR"
 
-from configs.features_config import (
+# базовые не обработанные 338 фичей
+# from configs.features_config import (
+#     NUMERICAL_FEATURES,
+#     CATEGORICAL_FEATURES,
+#     BIN_CATEGORICAL_FEATURES,
+# )
+
+# итоговые 35 фичей (с дальнейшим OHE ~ 50)
+from configs.final_features_config import (
     NUMERICAL_FEATURES,
     CATEGORICAL_FEATURES,
     BIN_CATEGORICAL_FEATURES,
@@ -75,19 +83,21 @@ MODEL_PARAMS = {
         'objective': 'binary',
         'metric': 'auc',
         'boosting_type': 'gbdt',
-        'n_estimators': 1000,
+        'n_estimators': 500,
         'learning_rate': 0.05,
         'n_jobs': -1,
-        'num_leaves': 15,
-        'min_child_samples': 70,
+        'num_leaves': 10,
+        'min_child_samples': 50,
         'reg_alpha': 0.1,
         'reg_lambda': 0.1,
         'colsample_bytree': 0.8,
         'subsample': 0.8,
-        'max_depth': 6
+        'max_depth': 5,
+        # вес положительного класса ~ 11.4
+        # 'is_unbalance': True
+        'scale_pos_weight': 20.0 # увеличим для лучшего Recall
     }
 }
-
 # =================================== #
  #  4 настройки для обработки данных #
 # =================================== #
