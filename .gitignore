@@ -5,6 +5,7 @@ venv/
 env/
 *.pyc
 __init__.py
+*.ipynb
 
 .idea/
 .vscode/
