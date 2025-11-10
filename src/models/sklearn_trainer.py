@@ -1,10 +1,10 @@
-# src/models/sklearn_baseline_trainer.py
+# src/models/sklearn_trainer.py
 from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.ensemble import RandomForestClassifier
 
 from src.models.trainer_interface import BaseTrainer
 
-class SklearnBaseline(BaseTrainer):
+class SklearnTrainer(BaseTrainer):
     """"
     Класс "учитель" для классических моделей Sklearn (LR, RF, SGD, ...)
     """
@@ -27,6 +27,5 @@ class SklearnBaseline(BaseTrainer):
         Реализация абстрактного метода: возвращает инициализированный LGBMClassifier.
         """
         model_class = self.SUPPORTED_MODELS[self.model_name]
-        params = self.model_params.copy()
 
-        return model_class(**params)
+        return model_class(**self.model_params)
