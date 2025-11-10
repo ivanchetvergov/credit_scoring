@@ -1,0 +1,48 @@
+# src/models/xgboost_trainer.py
+from xgboost.sklearn import XGBClassifier
+from src.models.trainer_interface import BaseTrainer
+from sklearn.pipeline import Pipeline
+from typing import Optional, Dict, Tuple, Any
+import numpy as np
+
+class XGBoostTrainer(BaseTrainer):
+    """
+    Класс-тренер для модели XGBoostClassifier.
+    Поддерживает раннюю остановку (early stopping) через переопределение метода train.
+    """
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(model_name='xgboost', **kwargs)
+
+    def train(
+            self,
+            X_train: np.ndarray,
+            y_train: np.ndarray,
+            X_test: np.ndarray,
+            y_test: np.ndarray,
+            fit_kwargs: Optional[Dict] = None
+    ) -> Tuple[Pipeline, Dict[str, Any]]:
+        """
+        Переопределение метода train для добавления аргументов для ранней остановки.
+        """
+        fit_kwargs = {
+            # 1. Early Stopping: X_test используется как eval_set
+            'model__eval_set': [(X_test, y_test)],
+            'model__early_stopping_rounds': self.model_params.get('early_stopping_rounds', 50),
+            'model__verbose': False
+        }
+
+        # вызываем родительский метод с дополнительными аргументами
+        return super().train(
+            X_train=X_train,
+            y_train=y_train,
+            X_test=X_test,
+            y_test=y_test,
+            fit_kwargs=fit_kwargs
+        )
+
+    def _get_model(self):
+        """
+        Реализация абстрактного метода: возвращает инициализированный XGBClassifier.
+        """
+        # XGBoost ожидает, что категориальные фичи уже преобразованы (OHE/Label Encoding).
+        return XGBClassifier(**self.model_params)

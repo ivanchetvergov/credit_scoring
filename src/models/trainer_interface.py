@@ -1,9 +1,8 @@
+# src/models/trainer_interface.py
 import joblib
 import logging
 import numpy as np
 from sklearn.model_selection import cross_val_score, StratifiedKFold
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
     roc_auc_score,
     accuracy_score,
@@ -14,8 +13,8 @@ from sklearn.metrics import (
     classification_report
 )
 from sklearn.pipeline import Pipeline
-from lightgbm import LGBMClassifier
 from typing import Dict, Optional, Tuple, Any
+from abc import ABC, abstractmethod
 
 from src.config import (
     SAVED_MODELS_DIR,
@@ -29,17 +28,12 @@ from src.features.pipelines import get_preprocessing_pipeline
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class BaselineTrainer:
+class BaseTrainer(ABC):
     """
-    Класс для обучения и оценки baseline моделей.
-    :param model_name str название модели
-    :param model_params кастомные параметры моделие (если None, исп. из config)
-    :param cv_folds кол-во фолдов для кросс валидации
+    Абстрактный класс для обучения и оценки ML-моделей.
+    Всю специфичную для модели логику (инициализация, специальные аргументы fit)
+    должны реализовывать дочерние классы.
     """
-    AVAILABLE_MODELS = ['logistic_regression',
-                        'random_forest',
-                        'lightgbm'
-    ]
 
     def __init__(
         self,
@@ -47,36 +41,30 @@ class BaselineTrainer:
         model_params: Optional[Dict] = None,
         cv_folds: int = CV_FOLDS
     ) -> None:
-        if model_name not in self.AVAILABLE_MODELS:
-            raise ValueError(
-                f"Unknown model: {model_name}. "
-                f"Available models: {self.AVAILABLE_MODELS}"
-            )
-
+        # инициализация параметров модели
         self.model_name = model_name
-        self.model_params = model_params or MODEL_PARAMS.get(model_name, {})
-        self.cv_folds = cv_folds
+        self.cv_folds: int = cv_folds
         self.pipeline = None
-        self.metrics = {}
+        self.metrics: Dict[str, Any] = {}
+
+        if model_params is None:
+            self.model_params = MODEL_PARAMS.get(model_name, {})
+        else:
+            self.model_params = model_params
+
+        logger.info(f"Loaded params for {self.model_name}: {self.model_params}")
 
         # создаем директории
         SAVED_MODELS_DIR.mkdir(parents=True, exist_ok=True)
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-
+    @abstractmethod
     def _get_model(self):
         """
-        Возращает модель по имени.
-        :return: sklearn-compatible model Инициализированная модель
+        Абстрактный метод, который должен возвращать конкретную
+        инициализированную модель (LGBM, CatBoost, и т.д.).
         """
-        models = {
-            'logistic_regression': LogisticRegression,
-            'random_forest': RandomForestClassifier,
-            'lightgbm': LGBMClassifier
-        }
-
-        model_class = models[self.model_name]
-        return model_class(**self.model_params)
+        pass
 
     @staticmethod
     def _calculate_metrics(
@@ -98,7 +86,8 @@ class BaselineTrainer:
             X_train: np.ndarray,
             y_train: np.ndarray,
             X_test: np.ndarray,
-            y_test: np.ndarray
+            y_test: np.ndarray,
+            fit_kwargs: Optional[Dict] = None
     ) -> Tuple[Pipeline, Dict[str, Any]]:
         """
         Обучает модель и оценивает на тестовой выборке
@@ -117,9 +106,10 @@ class BaselineTrainer:
                 ('model', model)
             ])
 
+            fit_kwargs = fit_kwargs or {}
             # обучение
-            logger.info("Fitting model...")
-            self.pipeline.fit(X_train, y_train)
+            logger.info(f"Fitting model with kwargs: {fit_kwargs}...")
+            self.pipeline.fit(X_train, y_train, **fit_kwargs)
 
             # предсказание на train
             logger.info("Evaluating on train set...")
@@ -233,10 +223,6 @@ class BaselineTrainer:
     def save_model(pipeline, model_name: str, metrics: dict):
         """Сохраянет обученую модель"""
         try:
-            # убедимся, что директории существуют
-            SAVED_MODELS_DIR.mkdir(parents=True, exist_ok=True)
-            RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-
             # сохраняем модель
             model_path = SAVED_MODELS_DIR / f"{model_name}_pipeline.joblib"
             joblib.dump(pipeline, model_path)

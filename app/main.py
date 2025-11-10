@@ -5,9 +5,9 @@ from fastapi import FastAPI, HTTPException
 from typing import Dict, Optional, Any
 from datetime import datetime
 
-from src.models.baseline_trainer import BaselineTrainer
+from src.models.sklearn_trainer import SklearnTrainer
 from app.schemas import RawApplicationData, PredictionResponse
-from configs.final_features_config import FEATURE_ORDER
+from configs.processeed_features_config import FEATURE_ORDER
 import logging
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ def load_model_on_startup():
     global MODEL_PIPELINE, MODEL_METRICS
 
     try:
-        pipeline, metrics = BaselineTrainer.load_model(MODEL_NAME)
+        pipeline, metrics = SklearnTrainer.load_model(MODEL_NAME)
 
         MODEL_PIPELINE = pipeline
         MODEL_METRICS = metrics

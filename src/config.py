@@ -31,27 +31,28 @@ FEATURE_STORE_PATH = PROCESSED_DATA_DIR / FEATURE_STORE_FILE
 MODEL_PIPELINE_NAME = "credit_default_pipeline.joblib"
 MODEL_PATH = SAVED_MODELS_DIR / MODEL_PIPELINE_NAME
 
-
 # ========================= #
 #  2 определение признаков  #
 # ========================= #
+
+
 
 TARGET_COLUMN = "TARGET"
 ID_COLUMN = "SK_ID_CURR"
 
 # базовые не обработанные 338 фичей
-# from configs.features_config import (
-#     NUMERICAL_FEATURES,
-#     CATEGORICAL_FEATURES,
-#     BIN_CATEGORICAL_FEATURES,
-# )
-
-# итоговые 35 фичей (с дальнейшим OHE ~ 50)
-from configs.final_features_config import (
+from configs.raw_features_config import (
     NUMERICAL_FEATURES,
     CATEGORICAL_FEATURES,
     BIN_CATEGORICAL_FEATURES,
 )
+
+# итоговые 35 фичей (с дальнейшим OHE ~ 50)
+# from configs.processeed_features_config import (
+#     NUMERICAL_FEATURES,
+#     CATEGORICAL_FEATURES,
+#     BIN_CATEGORICAL_FEATURES,
+# )
 
 # =============================== #
  # 3 настройка модели и обучения #
@@ -61,43 +62,20 @@ SEED = 42
 TEST_SIZE = 0.25
 CV_FOLDS = 5
 
-# параметры для разных моделей
-MODEL_PARAMS = {
-    'logistic_regression': {
-        'max_iter': 1000,
-        'random_state': SEED,
-        'class_weight': 'balanced'
-    },
-    'random_forest': {
-        'n_estimators': 250,
-        'max_depth': 8,
-        'min_samples_split': 60,
-        'min_samples_leaf': 20,
-        'random_state': SEED,
-        'class_weight': 'balanced',
-        'n_jobs': -1,
-        'verbose': 0
-    },
-    'lightgbm': {
-        'random_state': SEED,
-        'objective': 'binary',
-        'metric': 'auc',
-        'boosting_type': 'gbdt',
-        'n_estimators': 500,
-        'learning_rate': 0.05,
-        'n_jobs': -1,
-        'num_leaves': 10,
-        'min_child_samples': 50,
-        'reg_alpha': 0.1,
-        'reg_lambda': 0.1,
-        'colsample_bytree': 0.8,
-        'subsample': 0.8,
-        'max_depth': 5,
-        # вес положительного класса ~ 11.4
-        # 'is_unbalance': True
-        'scale_pos_weight': 20.0 # увеличим для лучшего Recall
-    }
-}
+# --- ИМПОРТ ПАРАМЕТРОВ ---
+from configs.catboost_config import MODEL_PARAMS as CATBOOST_PARAMS
+from configs.lightgbm_config import MODEL_PARAMS as LGBM_PARAMS
+from configs.sklearn_config import MODEL_PARAMS as SKLEARN_PARAMS
+from configs.xgboost_config  import MODEL_PARAMS as XGBoost_PARAMS
+
+
+# --- ГЛОБАЛЬНЫЙ КАТАЛОГ ПАРАМЕТРОВ ---
+MODEL_PARAMS = {}
+MODEL_PARAMS.update(CATBOOST_PARAMS)
+MODEL_PARAMS.update(LGBM_PARAMS)
+MODEL_PARAMS.update(SKLEARN_PARAMS)
+MODEL_PARAMS.update(XGBoost_PARAMS)
+
 # =================================== #
  #  4 настройки для обработки данных #
 # =================================== #
