@@ -5,6 +5,10 @@ from pathlib import Path
 import sys
 from typing import List, Dict, Any
 
+from src.models import MODEL_TRAINERS_REGISTRY, AVAILABLE_MODELS, BaseTrainer, SklearnTrainer
+from src.reporting.compare_models import compare_models
+from sklearn.model_selection import train_test_split
+
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import warnings
@@ -15,12 +19,8 @@ from src.config import (
     TARGET_COLUMN,
     ID_COLUMN,
     SEED,
-    NUMERICAL_FEATURES,
     TEST_SIZE
 )
-from src.models.sklearn_trainer import BaselineTrainer
-from src.reporting.compare_models import compare_models
-from sklearn.model_selection import train_test_split
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,16 +28,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 def prepare_data(df: pd.DataFrame) -> tuple:
     """
     Подготавливает данные для обучения.
     """
     logger.info("Preparing data for training...")
-
-    for col in NUMERICAL_FEATURES:
-        # errors='coerce' заменит все нечисловые строки на NaN
-        df[col] = pd.to_numeric(df[col], errors='coerce')
 
     # разделение на признаки и таргет
     X = df.drop(columns=[TARGET_COLUMN, ID_COLUMN], axis=1)
@@ -66,12 +61,20 @@ def train_single_model(
     """
     Обучает одну модель.
     """
+    if model_name not in MODEL_TRAINERS_REGISTRY:
+        raise ValueError(f"Unknown model: {model_name}. Available: {AVAILABLE_MODELS}")
     try:
         logger.info(f"{'='*60}")
         logger.info(f"Training model: {model_name}")
         logger.info(f"{'='*60}")
 
-        trainer = BaselineTrainer(model_name=model_name)
+        # 1. получаем класс тренера (CatBoostTrainer, LGBMTrainer, и т.д.)
+        TrainerClass = MODEL_TRAINERS_REGISTRY[model_name]
+
+        if TrainerClass is SklearnTrainer:
+            trainer = TrainerClass(model_name=model_name)
+        else:
+            trainer = TrainerClass()
 
         # кросс-валидация (опционально)
         if run_cv:
@@ -81,7 +84,7 @@ def train_single_model(
         final_pipeline, metrics = trainer.train(X_train, y_train, X_test, y_test)
 
         # сохраняем
-        BaselineTrainer.save_model(final_pipeline, model_name, metrics)
+        BaseTrainer.save_model(final_pipeline, model_name, metrics)
 
         return metrics
 
@@ -110,7 +113,7 @@ def train_all_models(
             )
             all_results[model_name] = metrics
 
-        except Exception as e:
+        except Exception:
             logger.error(f"Model {model_name} failed and will be skipped")
             failed_models.append(model_name)
 
@@ -131,8 +134,8 @@ def train():
     parser.add_argument(
         'models',
         nargs='*',
-        default=['logistic_regression', 'random_forest', 'lightgbm'],
-        help='List of models to train (e.g., logistic_regression random_forest lightgbm)'
+        default=['logistic_regression', 'random_forest', 'sgd_classifier', 'lightgbm', 'xgboost', 'catboost'],
+        help=f'List of models to train. Available: {", ".join(AVAILABLE_MODELS)}'
     )
     parser.add_argument(
         '--no-cv',
