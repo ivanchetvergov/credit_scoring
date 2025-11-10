@@ -121,6 +121,7 @@ def get_catboost_preprocessing_pipeline() -> Pipeline:
     """
     pipeline = Pipeline(
         steps=[
+            ('coercer_pre', DataFrameCoercer()),
             ('anomaly_handler', AnomalyHandler()),
             ('feature_creator', FeatureCreator()),
             # CatBoost не требует нормализации и OHE

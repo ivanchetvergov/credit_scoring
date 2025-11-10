@@ -1,5 +1,6 @@
 # src/models/xgboost_trainer.py
 from xgboost.sklearn import XGBClassifier
+from xgboost.callback import EarlyStopping
 from src.models.trainer_interface import BaseTrainer
 from sklearn.pipeline import Pipeline
 from typing import Optional, Dict, Tuple, Any
@@ -24,10 +25,21 @@ class XGBoostTrainer(BaseTrainer):
         """
         Переопределение метода train для добавления аргументов для ранней остановки.
         """
+        # 1. извлекаем необходимое количество раундов из конфига
+        stop_rounds = self.model_params.get('early_stopping_rounds', 200)
+
+        # 2. cоздаем callback для ранней остановки
+        early_stop = EarlyStopping(
+            rounds=stop_rounds,
+            save_best=True,
+            metric_name='auc',      # указываем метрику для мониторинга
+            data_name='validation'  # имя eval_set, которое мы передадим ниже
+        )
+
         fit_kwargs = {
-            # 1. Early Stopping: X_test используется как eval_set
+            # 3. early Stopping: X_test используется как eval_set
             'model__eval_set': [(X_test, y_test)],
-            'model__early_stopping_rounds': self.model_params.get('early_stopping_rounds', 50),
+            'model__callbacks': [early_stop],
             'model__verbose': False
         }
 

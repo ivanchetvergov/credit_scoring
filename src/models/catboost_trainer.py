@@ -5,7 +5,9 @@ from sklearn.pipeline import Pipeline
 from typing import Dict, Tuple, Any, Optional
 import numpy as np
 
+
 from configs.catboost_config import CAT_FEATURES_COLS
+from src.config import CATEGORICAL_FEATURES, BIN_CATEGORICAL_FEATURES
 
 class CatBoostTrainer(BaseTrainer):
     """"
@@ -28,16 +30,18 @@ class CatBoostTrainer(BaseTrainer):
         - cat_features (список колонок для нативной обработки)
         - eval_set (для ранней остановки)
         """
+        # 1. используем список категориальных фичей из конфига
+        cat_features = [col for col in CATEGORICAL_FEATURES if col in X_train.columns]
 
         # аргументы для передачи в pipeline.fit()
         fit_kwargs = {
             # 1. CatBoost Specific: передаем список категориальных фичей
-            'model__cat_features': CAT_FEATURES_COLS,
+            'model__cat_features': cat_features,
 
             # 2. Early Stopping: используем X_test как валидационный набор
             'model__eval_set': (X_test, y_test),
-            'model__early_stopping_rounds': self.model_params.get('early_stopping_rounds', 100),
-            'model__verbose': self.model_params.get('verbose', False)
+            'model__early_stopping_rounds': self.model_params.get('early_stopping_rounds', 200),
+            'model__verbose': self.model_params.get('verbose', 50)
         }
 
         # вызываем родительский метод с дополнительными аргументами
