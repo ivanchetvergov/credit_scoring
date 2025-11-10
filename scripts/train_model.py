@@ -18,7 +18,7 @@ from src.config import (
     NUMERICAL_FEATURES,
     TEST_SIZE
 )
-from src.models.baseline_trainer import BaselineTrainer
+from src.models.sklearn_trainer import BaselineTrainer
 from src.reporting.compare_models import compare_models
 from sklearn.model_selection import train_test_split
 
