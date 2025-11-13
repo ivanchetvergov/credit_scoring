@@ -1,7 +1,9 @@
 # configs/catboost_config
 from src.config import SEED
+from configs.raw_features_config import CATEGORICAL_FEATURES, BIN_CATEGORICAL_FEATURES
 
-CAT_FEATURES_COLS = []
+# CatBoost ожидает список ВСЕХ колонок, содержащих строки.
+CAT_FEATURES_COLS = CATEGORICAL_FEATURES + BIN_CATEGORICAL_FEATURES
 
 MODEL_PARAMS = {
     'catboost': {
@@ -19,6 +21,6 @@ MODEL_PARAMS = {
         # настройки итераций и ранней остановки
         'n_estimators': 3000,
         'early_stopping_rounds': 200,   # дадим больше шансов на сходимость
-        'verbose': 50,                  # логируем каждые 50 шагов
+        'verbose': 10,                  # логируем каждые 50 шагов
     }
 }

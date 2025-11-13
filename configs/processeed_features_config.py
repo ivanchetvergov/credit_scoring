@@ -1,4 +1,4 @@
-# configs/final_features_config.py
+# configs/processed_features_config.py
 
 # =========================================================================
 # Feature Contract: Сокращенный список 39 ключевых признаков (по результатам Permutation Importance)
