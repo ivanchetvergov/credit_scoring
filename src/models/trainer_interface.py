@@ -2,7 +2,6 @@
 import joblib
 import logging
 import numpy as np
-import pandas as pd
 from sklearn.model_selection import cross_val_score, StratifiedKFold
 from sklearn.metrics import (
     roc_auc_score,
@@ -24,7 +23,7 @@ from src.config import (
     CV_FOLDS,
     MODEL_PARAMS
 )
-from src.pipelines.preprocessor import get_model_specific_pipeline
+from src.pipelines import get_model_specific_pipeline
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -89,7 +88,8 @@ class BaseTrainer(ABC):
             y_train: np.ndarray,
             X_test: Any,
             y_test: np.ndarray,
-            fit_kwargs: Optional[Dict] = None
+            fit_kwargs: Optional[Dict] = None,
+            external_preprocessor: Optional[Pipeline] = None
     ) -> Tuple[Pipeline, Dict[str, Any]]:
         """
         Обучает модель и оценивает на тестовой выборке.
@@ -101,11 +101,16 @@ class BaseTrainer(ABC):
         logger.info('=' * 80)
 
         try:
-            # УЛУЧШЕНО: используем фабричную функцию для выбора оптимального пайплайна
-            preprocessor = get_model_specific_pipeline(
-                model_name=self.model_name,
-                include_feature_engineering=True
-            )
+            if external_preprocessor:
+                preprocessor = external_preprocessor
+                # в CatBoost мы должны передать препроцессор, который не включает FE-шаги.
+                logger.info(f"Using external preprocessor for {self.model_name}.")
+            else:
+                # если не передан, используем фабрику (для Sklearn, LGBM, XGBoost)
+                preprocessor = get_model_specific_pipeline(
+                    model_name=self.model_name,
+                    include_feature_engineering=True
+                )
             model = self._get_model()
 
             self.pipeline = Pipeline([

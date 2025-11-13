@@ -1,15 +1,11 @@
 # src/pipelines/catboost_pipeline.py (ОБНОВЛЕННЫЙ)
 
 from catboost import CatBoostClassifier
-from sklearn.base import BaseEstimator
 from sklearn.pipeline import Pipeline
-from typing import Dict, Any
 
+from src.features.custom_transformers import IdentityTransformer
 from src.pipelines.base_pipeline import BasePipelineBuilder
-# Импортируем нашу фабричную функцию
-from src.pipelines.preprocessor import get_model_specific_pipeline
-from src.config import CATEGORICAL_FEATURES, BIN_CATEGORICAL_FEATURES
-
+from configs.catboost_config import CAT_FEATURES_COLS
 
 class CatBoostPipelineBuilder(BasePipelineBuilder):
     """
@@ -17,14 +13,12 @@ class CatBoostPipelineBuilder(BasePipelineBuilder):
     Использует минимальный препроцессинг (только FE) с помощью фабричной функции.
     Инкапсулирует передачу списка категориальных фичей в CatBoostClassifier.
     """
-
     def _get_preprocessor(self, feature_engineering: bool = True) -> Pipeline:
         """
         Получает специфичный для CatBoost пайплайн препроцессинга,
         используя фабричную функцию.
         """
-        return get_model_specific_pipeline(
-            model_name='catboost',
+        return get_catboost_preprocessing_pipeline(
             include_feature_engineering=feature_engineering
         )
 
@@ -36,11 +30,22 @@ class CatBoostPipelineBuilder(BasePipelineBuilder):
         params = {'random_state': self.random_state}
         params.update(self.model_params)
 
-        # 1. рпределяем категориальные фичи, которые CatBoost должен обработать
-        cat_features_for_model = CATEGORICAL_FEATURES + BIN_CATEGORICAL_FEATURES
+        # 1. определяем категориальные фичи, которые CatBoost должен обработать
+        cat_features_for_model = CAT_FEATURES_COLS
 
         # 2. Добавляем их к параметрам инициализации модели
         params['cat_features'] = cat_features_for_model
 
         # verbose=False по умолчанию для чистоты логов
         return CatBoostClassifier(verbose=False, **params)
+
+
+def get_catboost_preprocessing_pipeline(include_feature_engineering: bool = True) -> Pipeline:
+    """
+    Создает минимальный Sklearn Pipeline, содержащий только IdentityTransformer.
+    FE шаги должны быть применены ОТДЕЛЬНО в CatBoostTrainer.
+    """
+    # Пайплайн CatBoost состоит только из сериализуемой заглушки.
+    return Pipeline(steps=[
+        ('passthrough', IdentityTransformer()),
+    ])

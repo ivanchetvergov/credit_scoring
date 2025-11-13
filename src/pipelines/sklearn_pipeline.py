@@ -1,11 +1,19 @@
 # src/pipelines/sklearn_pipeline.py
 
 from sklearn.base import BaseEstimator
+from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LogisticRegression
 
+from configs.processeed_features_config import NUMERICAL_FEATURES, CATEGORICAL_FEATURES, BIN_CATEGORICAL_FEATURES
 from src.pipelines.base_pipeline import BasePipelineBuilder
-from src.pipelines.preprocessor import get_model_specific_pipeline
+
+from src.pipelines.base_preprocessor import (
+    get_base_feature_engineering_steps,
+    get_numerical_transformer,
+    get_categorical_transformer,
+    get_binary_transformer
+)
 
 class SKLearnPipelineBuilder(BasePipelineBuilder):
     """
@@ -18,8 +26,7 @@ class SKLearnPipelineBuilder(BasePipelineBuilder):
         Собирает полный пайплайн препроцессинга.
         FE (если нужно) -> Sklearn Full Preprocessor.
         """
-        return get_model_specific_pipeline(
-            model_name= 'default',
+        return get_sklearn_preprocessing_pipeline(
             include_feature_engineering=feature_engineering
         )
 
@@ -32,3 +39,28 @@ class SKLearnPipelineBuilder(BasePipelineBuilder):
 
         # в реальном коде тут должна быть логика извлечения model_class
         return LogisticRegression(**params)
+
+
+def get_sklearn_preprocessing_pipeline(include_feature_engineering: bool = True) -> Pipeline:
+    """
+    Создает полный пайплайн препроцессинга для стандартных Sklearn/XGBoost моделей.
+    """
+    # logger.info(f"Building SKLEARN/XGBoost pipeline (FE={'enabled' if include_feature_engineering else 'disabled'})")
+
+    steps = []
+
+    if include_feature_engineering:
+        steps.extend(get_base_feature_engineering_steps())
+
+    column_transformer = ColumnTransformer(
+        transformers=[
+            ('num', get_numerical_transformer(scaled=True), NUMERICAL_FEATURES),
+            ('cat', get_categorical_transformer(), CATEGORICAL_FEATURES),
+            ('bin', get_binary_transformer(), BIN_CATEGORICAL_FEATURES)
+        ],
+        remainder='drop',
+        verbose_feature_names_out=False
+    )
+
+    steps.append(('preprocessor', column_transformer))
+    return Pipeline(steps=steps)
