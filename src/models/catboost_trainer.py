@@ -5,9 +5,10 @@ from sklearn.pipeline import Pipeline
 from typing import Dict, Tuple, Any, Optional
 import numpy as np
 
-
 from configs.catboost_config import CAT_FEATURES_COLS
-from src.config import CATEGORICAL_FEATURES, BIN_CATEGORICAL_FEATURES
+import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 class CatBoostTrainer(BaseTrainer):
     """"
@@ -19,9 +20,9 @@ class CatBoostTrainer(BaseTrainer):
 
     def train(
             self,
-            X_train: np.ndarray,
+            X_train: Any,
             y_train: np.ndarray,
-            X_test: np.ndarray,
+            X_test: Any,
             y_test: np.ndarray,
             fit_kwargs: Optional[Dict] = None
     ) -> Tuple[Pipeline, Dict[str, Any]]:
@@ -30,13 +31,10 @@ class CatBoostTrainer(BaseTrainer):
         - cat_features (список колонок для нативной обработки)
         - eval_set (для ранней остановки)
         """
-        # 1. используем список категориальных фичей из конфига
-        cat_features = [col for col in CATEGORICAL_FEATURES if col in X_train.columns]
-
         # аргументы для передачи в pipeline.fit()
         fit_kwargs = {
             # 1. CatBoost Specific: передаем список категориальных фичей
-            'model__cat_features': cat_features,
+            'model__cat_features': CAT_FEATURES_COLS,
 
             # 2. Early Stopping: используем X_test как валидационный набор
             'model__eval_set': (X_test, y_test),

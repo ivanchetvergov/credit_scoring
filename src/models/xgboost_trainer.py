@@ -1,16 +1,17 @@
 # src/models/xgboost_trainer.py
 from xgboost.sklearn import XGBClassifier
 from src.models.trainer_interface import BaseTrainer
-from src.features.pipelines import get_preprocessing_pipeline
 from sklearn.pipeline import Pipeline
 from typing import Optional, Dict, Tuple, Any
 import numpy as np
+from src.config import SEED
 
 class XGBoostTrainer(BaseTrainer):
     """
     Класс-тренер для модели XGBoostClassifier.
     Поддерживает раннюю остановку (early stopping) через переопределение метода train.
     """
+
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(model_name='xgboost', **kwargs)
 
@@ -24,24 +25,29 @@ class XGBoostTrainer(BaseTrainer):
     ) -> Tuple[Pipeline, Dict[str, Any]]:
         """
         Переопределение метода train для добавления аргументов для ранней остановки.
+
+        ВАЖНО: передаем RAW X_test и y_test в eval_set, так как Pipeline
+        сам применит препроцессинг через callbacks во время обучения.
         """
-        fit_kwargs = fit_kwargs or {}
-        preprocessor_for_test_transform = get_preprocessing_pipeline()
+        it_kwargs = fit_kwargs or {}
 
-        # 1. обучаем препроцессор ТОЛЬКО на X_train
-        preprocessor_for_test_transform.fit(X_train)
+        # конвертация object -> category
+        for col in X_train.select_dtypes(include='object'):
+            X_train[col] = X_train[col].astype('category')
+        for col in X_test.select_dtypes(include='object'):
+            X_test[col] = X_test[col].astype('category')
 
-        # 2. трансформируем X_test, используя статистики, полученные ИЗ X_train
-        X_test_transformed = preprocessor_for_test_transform.transform(X_test)
 
-        # 3. создаем fit_kwargs с ПРЕОБРАЗОВАННЫМИ данными
+        # достаём препроцессор из пайплайна
+        preprocessor = self.pipeline.named_steps.get('preprocessor')
+        X_test_transformed = preprocessor.transform(X_test)
+
         final_fit_kwargs = {
-            'model__eval_set': [(X_test, y_test)],
-            'model__verbose': False
+            'model__eval_set': [(X_test_transformed, y_test)],
+            'model__verbose': self.model_params.get('verbose', False)
         }
 
         fit_kwargs.update(final_fit_kwargs)
-        print("DEBUG: Final fit_kwargs for XGBoost:", fit_kwargs)
 
         return super().train(
             X_train=X_train,
@@ -51,9 +57,9 @@ class XGBoostTrainer(BaseTrainer):
             fit_kwargs=fit_kwargs
         )
 
+
     def _get_model(self):
-        """
-        Реализация абстрактного метода: возвращает инициализированный XGBClassifier.
-        """
-        # XGBoost ожидает, что категориальные фичи уже преобразованы (OHE/Label Encoding).
-        return XGBClassifier(**self.model_params)
+        """Возвращает инициализированный XGBClassifier."""
+        params = {'random_state': SEED}
+        params.update(self.model_params or {})
+        return XGBClassifier(**params)

@@ -2,6 +2,7 @@
 import joblib
 import logging
 import numpy as np
+import pandas as pd
 from sklearn.model_selection import cross_val_score, StratifiedKFold
 from sklearn.metrics import (
     roc_auc_score,
@@ -23,10 +24,11 @@ from src.config import (
     CV_FOLDS,
     MODEL_PARAMS
 )
-from src.features.pipelines import get_preprocessing_pipeline
+from src.pipelines.preprocessor import get_model_specific_pipeline
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
 
 class BaseTrainer(ABC):
     """
@@ -36,10 +38,10 @@ class BaseTrainer(ABC):
     """
 
     def __init__(
-        self,
-        model_name: str,
-        model_params: Optional[Dict] = None,
-        cv_folds: int = CV_FOLDS
+            self,
+            model_name: str,
+            model_params: Optional[Dict] = None,
+            cv_folds: int = CV_FOLDS
     ) -> None:
         # инициализация параметров модели
         self.model_name = model_name
@@ -75,30 +77,35 @@ class BaseTrainer(ABC):
         """Вычисляет метрики качества модели"""
         return {
             'accuracy': accuracy_score(y_true, y_pred),
-            'precision': precision_score(y_true, y_pred),
-            "recall": recall_score(y_true, y_pred),
-            'f1': f1_score(y_true, y_pred),
+            'precision': precision_score(y_true, y_pred, zero_division=0),
+            "recall": recall_score(y_true, y_pred, zero_division=0),
+            'f1': f1_score(y_true, y_pred, zero_division=0),
             'roc_auc': roc_auc_score(y_true, y_pred_proba)
         }
 
     def train(
             self,
-            X_train: np.ndarray,
+            X_train: Any,
             y_train: np.ndarray,
-            X_test: np.ndarray,
+            X_test: Any,
             y_test: np.ndarray,
             fit_kwargs: Optional[Dict] = None
     ) -> Tuple[Pipeline, Dict[str, Any]]:
         """
-        Обучает модель и оценивает на тестовой выборке
+        Обучает модель и оценивает на тестовой выборке.
+
+        УЛУЧШЕНО: автоматически выбирает оптимальный препроцессор под модель.
         """
         logger.info('=' * 80)
         logger.info(f"Training {self.model_name} model...")
         logger.info('=' * 80)
 
         try:
-            # создаем пайплайн
-            preprocessor = get_preprocessing_pipeline()
+            # УЛУЧШЕНО: используем фабричную функцию для выбора оптимального пайплайна
+            preprocessor = get_model_specific_pipeline(
+                model_name=self.model_name,
+                include_feature_engineering=True
+            )
             model = self._get_model()
 
             self.pipeline = Pipeline([
@@ -107,8 +114,9 @@ class BaseTrainer(ABC):
             ])
 
             fit_kwargs = fit_kwargs or {}
+
             # обучение
-            logger.info(f"Fitting model with kwargs: {fit_kwargs}...")
+            logger.info(f"Fitting model with kwargs: {list(fit_kwargs.keys())}...")
             self.pipeline.fit(X_train, y_train, **fit_kwargs)
 
             # предсказание на train
@@ -130,6 +138,9 @@ class BaseTrainer(ABC):
                 'confusion_matrix': confusion_matrix(y_test, y_test_pred).tolist()
             })
 
+            # НОВОЕ: извлекаем Feature Importance, если доступно
+            self._extract_feature_importance()
+
             # логируем результаты
             self._log_results()
 
@@ -145,7 +156,7 @@ class BaseTrainer(ABC):
 
     def cross_validate(self, X, y):
         """Выполняет кросс-валидацию"""
-        logger.info(f"Performing {CV_FOLDS}-fold cross-validation...")
+        logger.info(f"Performing {self.cv_folds}-fold cross-validation...")
 
         try:
             cv = StratifiedKFold(
@@ -154,9 +165,13 @@ class BaseTrainer(ABC):
                 random_state=SEED
             )
 
-            # создаем пайплайн
-            preprocessor = get_preprocessing_pipeline()
+            # УЛУЧШЕНО: используем фабричную функцию
+            preprocessor = get_model_specific_pipeline(
+                model_name=self.model_name,
+                include_feature_engineering=True
+            )
             model = self._get_model()
+
             pipeline = Pipeline([
                 ('preprocessor', preprocessor),
                 ('model', model)
@@ -184,6 +199,47 @@ class BaseTrainer(ABC):
             logger.error(f"Error during cross-validation: {e}", exc_info=True)
             raise
 
+    def _extract_feature_importance(self):
+        """
+        НОВОЕ: извлекает Feature Importance из модели, если доступно.
+        Поддерживает: LightGBM, XGBoost, CatBoost, RandomForest.
+        """
+        try:
+            model = self.pipeline.named_steps['model']
+
+            if hasattr(model, 'feature_importances_'):
+                importances = model.feature_importances_
+
+                # получаем названия фичей после препроцессинга
+                from src.features.data_helpers import get_feature_names
+                preprocessor_pipeline = self.pipeline.named_steps['preprocessor']
+
+                # ищем ColumnTransformer в пайплайне
+                column_transformer = None
+                for step_name, step in preprocessor_pipeline.named_steps.items():
+                    if hasattr(step, 'transformers_'):
+                        column_transformer = step
+                        break
+
+                if column_transformer:
+                    feature_names = get_feature_names(column_transformer)
+
+                    # сохраняем только топ-20 для краткости
+                    top_n = min(20, len(importances))
+                    top_indices = np.argsort(importances)[-top_n:][::-1]
+
+                    self.metrics['feature_importance'] = {
+                        'features': [feature_names[i] for i in top_indices],
+                        'importances': [float(importances[i]) for i in top_indices]
+                    }
+
+                    logger.info(f"\nTop {top_n} Feature Importances:")
+                    for idx in top_indices[:10]:  # показываем только топ-10
+                        logger.info(f"  {feature_names[idx]}: {importances[idx]:.4f}")
+
+        except Exception as e:
+            logger.debug(f"Could not extract feature importance: {e}")
+
     def _log_results(self):
         """Логирует результаты обучения."""
         logger.info("=" * 80)
@@ -198,18 +254,22 @@ class BaseTrainer(ABC):
         for metric, value in self.metrics['test'].items():
             logger.info(f"  {metric}: {value:.4f}")
 
-        # проверка на overfitting
+        # УЛУЧШЕНО: более детальная проверка на overfitting
         train_auc = self.metrics['train']['roc_auc']
         test_auc = self.metrics['test']['roc_auc']
         overfit = train_auc - test_auc
 
-        logger.info(f"Overfitting check:")
+        logger.info(f"\nOverfitting Analysis:")
         logger.info(f"  Train ROC-AUC: {train_auc:.4f}")
         logger.info(f"  Test ROC-AUC: {test_auc:.4f}")
         logger.info(f"  Difference: {overfit:.4f}")
 
-        if overfit > 0.05:
-            logger.warning("  Model might be overfitting!")
+        if overfit > 0.10:
+            logger.warning("  CRITICAL: Severe overfitting detected!")
+        elif overfit > 0.05:
+            logger.warning("  Model is overfitting")
+        elif overfit > 0.02:
+            logger.info("  Minor overfitting (acceptable)")
         else:
             logger.info("  Model generalization looks good")
 
@@ -219,19 +279,24 @@ class BaseTrainer(ABC):
             logger.info(f"  TN={cm[0, 0]}, FP={cm[0, 1]}")
             logger.info(f"  FN={cm[1, 0]}, TP={cm[1, 1]}")
 
+            # добавляем метрики по confusion matrix
+            total = cm.sum()
+            accuracy = (cm[0, 0] + cm[1, 1]) / total
+            logger.info(f"  Accuracy from CM: {accuracy:.4f}")
+
     @staticmethod
     def save_model(pipeline, model_name: str, metrics: dict):
-        """Сохраянет обученую модель"""
+        """Сохраняет обученную модель"""
         try:
             # сохраняем модель
             model_path = SAVED_MODELS_DIR / f"{model_name}_pipeline.joblib"
             joblib.dump(pipeline, model_path)
-            logger.info(f"  Saved model pipeline to {model_path}")
+            logger.info(f" Saved model pipeline to {model_path}")
 
             # сохраняем метрики
             metrics_path = RESULTS_DIR / f"{model_name}_metrics.joblib"
             joblib.dump(metrics, metrics_path)
-            logger.info(f"  Saved metrics to {metrics_path}")
+            logger.info(f" Saved metrics to {metrics_path}")
 
             return model_path, metrics_path
 
