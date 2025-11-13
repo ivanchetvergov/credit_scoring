@@ -41,18 +41,18 @@ TARGET_COLUMN = "TARGET"
 ID_COLUMN = "SK_ID_CURR"
 
 # базовые не обработанные 338 фичей
-from configs.raw_features_config import (
-    NUMERICAL_FEATURES,
-    CATEGORICAL_FEATURES,
-    BIN_CATEGORICAL_FEATURES,
-)
-
-# итоговые 35 фичей (с дальнейшим OHE ~ 50)
-# from configs.processeed_features_config import (
+# from configs.raw_features_config import (
 #     NUMERICAL_FEATURES,
 #     CATEGORICAL_FEATURES,
 #     BIN_CATEGORICAL_FEATURES,
 # )
+
+# итоговые 35 фичей (с дальнейшим OHE ~ 50)
+from configs.processeed_features_config import (
+    NUMERICAL_FEATURES,
+    CATEGORICAL_FEATURES,
+    BIN_CATEGORICAL_FEATURES,
+)
 
 # =============================== #
  # 3 настройка модели и обучения #

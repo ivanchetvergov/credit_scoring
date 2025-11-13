@@ -1,12 +1,11 @@
 # src/pipelines/sklearn_pipeline.py
 
-from typing import Dict, Any
 from sklearn.base import BaseEstimator
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LogisticRegression
 
 from src.pipelines.base_pipeline import BasePipelineBuilder
-from src.pipelines.base_preprocessor import get_full_preprocessor
+from src.pipelines.preprocessor import get_model_specific_pipeline
 
 class SKLearnPipelineBuilder(BasePipelineBuilder):
     """
@@ -19,16 +18,10 @@ class SKLearnPipelineBuilder(BasePipelineBuilder):
         Собирает полный пайплайн препроцессинга.
         FE (если нужно) -> Sklearn Full Preprocessor.
         """
-        steps = []
-
-        if feature_engineering:
-            steps.append(('feature_engineering', self._get_feature_engineering_pipeline()))
-
-        # полный препроцессор Sklearn-стиля (OHE + Scaling)
-        # get_full_preprocessor() возвращает ColumnTransformer, который мы инкапсулируем в Pipeline
-        steps.append(('full_preprocessor', Pipeline([('column_transformer', get_full_preprocessor())])))
-
-        return Pipeline(steps)
+        return get_model_specific_pipeline(
+            model_name= 'default',
+            include_feature_engineering=feature_engineering
+        )
 
     def _get_model(self) -> BaseEstimator:
         """

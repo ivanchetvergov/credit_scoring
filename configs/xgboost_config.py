@@ -28,6 +28,7 @@ MODEL_PARAMS = {
 
         # выключаем устаревший кодировщик
         'use_label_encoder': False,
+        'enable_categorical': True,
         'n_jobs': -1,
     }
 }

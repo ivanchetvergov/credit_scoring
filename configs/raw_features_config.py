@@ -1,4 +1,4 @@
-# configs/features_config.py
+# configs/raw_features_config.py
 # Всего фичей для модели: 282
 # Обнаружено числовых: 230
 # Обнаружено категориальных (строковых): 16

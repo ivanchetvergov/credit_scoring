@@ -62,7 +62,9 @@ def _load_all_data() -> Dict[str, pd.DataFrame]:
 def create_feature_store(save: bool = True) -> pd.DataFrame:
     """
     Главная функция feature engineering'a: загрузка, агрегация, слияние
-    и сохранение feature_store
+    и сохранение feature_store.
+
+    ИСПРАВЛЕНО: теперь использует fit_transform вместо просто transform.
     """
     logger.info("=" * 80)
     logger.info("Starting Feature Store creation...")
@@ -79,10 +81,10 @@ def create_feature_store(save: bool = True) -> pd.DataFrame:
         # инициализируем агрегатор с загруженными вспомогательными данными
         aggregator = AuxiliaryFeatureAggregator(aux_data=data)
 
-        # применяем трансформацию: df_app является базой, к которой всё присоединяется
-        df_final = aggregator.transform(df_app)
+        # используем fit_transform вместо просто transform
+        df_final = aggregator.fit_transform(df_app)
 
-        logger.info(f"Feature Aggregation complete. Intermediate shape: {df_final.shape}")
+        logger.info(f"Feature Aggregation complete. Final shape: {df_final.shape}")
 
         # --- 3 сохранение Feature Store ---
         if save:

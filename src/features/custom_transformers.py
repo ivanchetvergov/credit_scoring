@@ -9,6 +9,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+
 class AnomalyHandler(BaseEstimator, TransformerMixin):
     """
     Обрабатывает аномальные значения в DAYS_EMPLOYED.
@@ -50,6 +51,7 @@ class FeatureCreator(BaseEstimator, TransformerMixin):
     - EMPLOYMENT_YEARS: стаж работы в годах
     - GOODS_PRICE_TO_CREDIT_RATIO: отношение стоимости товара к кредиту
     """
+
     def __init__(self, epsilon: float = 1.0):
         self.epsilon = epsilon
         self.created_features_: List[str] = []
@@ -63,12 +65,12 @@ class FeatureCreator(BaseEstimator, TransformerMixin):
 
         # 1 отношение кредита к доходу (credit burden)
         if 'AMT_CREDIT' in X.columns and 'AMT_INCOME_TOTAL' in X.columns:
-            X['CREDIT_INCOME_RATIO'] = X['AMT_CREDIT'] / (X['AMT_INCOME_TOTAL'] + 1)
+            X['CREDIT_INCOME_RATIO'] = X['AMT_CREDIT'] / (X['AMT_INCOME_TOTAL'] + self.epsilon)
             self.created_features_.append('CREDIT_INCOME_RATIO')
 
         # 2 отношение аннуитета к доходу (payment burden)
         if 'AMT_ANNUITY' in X.columns and 'AMT_INCOME_TOTAL' in X.columns:
-            X['ANNUITY_INCOME_RATIO'] = X['AMT_ANNUITY'] / (X['AMT_INCOME_TOTAL'] + 1)
+            X['ANNUITY_INCOME_RATIO'] = X['AMT_ANNUITY'] / (X['AMT_INCOME_TOTAL'] + self.epsilon)
             self.created_features_.append('ANNUITY_INCOME_RATIO')
 
         # 3 возраст клиента в годах
@@ -83,10 +85,10 @@ class FeatureCreator(BaseEstimator, TransformerMixin):
 
         # 5 отношение стоимости товара к кредиту
         if 'AMT_GOODS_PRICE' in X.columns and 'AMT_CREDIT' in X.columns:
-            X['GOODS_PRICE_TO_CREDIT_RATIO'] = X['AMT_GOODS_PRICE'] / (X['AMT_CREDIT'] + 1)
+            X['GOODS_PRICE_TO_CREDIT_RATIO'] = X['AMT_GOODS_PRICE'] / (X['AMT_CREDIT'] + self.epsilon)
             self.created_features_.append('GOODS_PRICE_TO_CREDIT_RATIO')
 
-        logger.debug(f"Feature creation complete. Created {len(self.created_features_)}.")
+        logger.debug(f"Feature creation complete. Created {len(self.created_features_)} features.")
 
         return X
 
@@ -96,59 +98,69 @@ class AuxiliaryFeatureAggregator(BaseEstimator, TransformerMixin):
     Трансформер для агрегации данных из вспомогательных таблиц
     (Bureau, Previous Applications и т.д.) на уровень клиента (SK_ID_CURR).
 
-    Fit: Не делает ничего.
-    Transform: Выполняет агрегацию и слияние.
+    Fit: Предвычисляет агрегации на train данных.
+    Transform: Применяет сохраненные агрегации через merge.
     """
 
-    def __init__(self, aux_data: Dict[str, pd.DataFrame]):
+    def __init__(self, aux_data: Optional[Dict[str, pd.DataFrame]] = None):
         """
         :param aux_data: Словарь вспомогательных датафреймов.
                          Пример: {'bureau': df_bureau, 'bureau_balance': df_bb, ...}
         """
-        self.aux_data = aux_data
+        self.aux_data = aux_data or {}
+        self.bureau_agg_ = None
+        self.prev_agg_ = None
 
     def fit(self, X: pd.DataFrame, y=None):
-        return self
+        """
+        Предвычисляет агрегации на этапе fit.
+        Это позволяет избежать data leakage между train и test.
+        """
+        logger.info("Fitting AuxiliaryFeatureAggregator...")
 
-    def fit(self, X: pd.DataFrame, y=None):
+        # --- 1. агрегация Bureau Balance ---
+        df_bb = self.aux_data.get('bureau_balance', pd.DataFrame())
+        df_bb_agg = self._aggregate_bureau_balance(df_bb)
+
+        # --- 2. агрегация Bureau ---
+        df_bureau = self.aux_data.get('bureau', pd.DataFrame())
+        self.bureau_agg_ = self._aggregate_bureau(df_bureau, df_bb_agg)
+
+        # --- 3. агрегация Previous Application ---
+        df_prev = self.aux_data.get('previous_application', pd.DataFrame())
+        self.prev_agg_ = self._aggregate_previous_application(df_prev)
+
+        logger.info("AuxiliaryFeatureAggregator fitted successfully")
         return self
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """
+        Применяет предвычисленные агрегации через merge.
+        """
         X_out = X.copy()
 
-        # --- 1. агрегация Bureau Balance
-        df_bb_agg = self._aggregate_bureau_balance(self.aux_data.get('bureau_balance', pd.DataFrame()))
-
-        # --- 2. агрегация Bureau (передаем bureau и результат bb_agg)
-        df_bureau_agg = self._aggregate_bureau(
-            self.aux_data.get('bureau', pd.DataFrame()),
-            df_bb_agg
-        )
-
-        # --- 3. агрегация Previous Application
-        df_prev_agg = self._aggregate_previous_application(self.aux_data.get('previous_application', pd.DataFrame()))
-
-        # --- 4. финальное слияние
-        if not df_bureau_agg.empty:
-            X_out = X_out.merge(df_bureau_agg, on='SK_ID_CURR', how='left')
+        # --- финальное слияние ---
+        if self.bureau_agg_ is not None and not self.bureau_agg_.empty:
+            X_out = X_out.merge(self.bureau_agg_, on='SK_ID_CURR', how='left')
             logger.debug(f"Merged Bureau features. Shape: {X_out.shape}")
 
-        if not df_prev_agg.empty:
-            X_out = X_out.merge(df_prev_agg, on='SK_ID_CURR', how='left')
+        if self.prev_agg_ is not None and not self.prev_agg_.empty:
+            X_out = X_out.merge(self.prev_agg_, on='SK_ID_CURR', how='left')
             logger.debug(f"Merged Previous App features. Shape: {X_out.shape}")
 
         return X_out
 
-    # --- внутренние методы ---
-    @staticmethod
-    def _aggregate_bureau_balance(self, df_bb: pd.DataFrame) -> pd.DataFrame:
-        """
-            Агрегирует ежемесячные статусы просрочки из bureau_balance на уровень
-            каждого предыдущего кредита (SK_ID_BUREAU)
+    # --- внутренние методы агрегации ---
 
-            :param df_bb: Bureau Balance DataFrame
-            :return: aggregated Bureau Balance DataFrame
-            """
+    @staticmethod
+    def _aggregate_bureau_balance(df_bb: pd.DataFrame) -> pd.DataFrame:
+        """
+        Агрегирует ежемесячные статусы просрочки из bureau_balance на уровень
+        каждого предыдущего кредита (SK_ID_BUREAU).
+
+        :param df_bb: Bureau Balance DataFrame
+        :return: aggregated Bureau Balance DataFrame
+        """
         logger.debug("Aggregating Bureau Balance features...")
 
         # проверка на пустой датафрейм
@@ -179,51 +191,63 @@ class AuxiliaryFeatureAggregator(BaseEstimator, TransformerMixin):
             raise
 
     @staticmethod
-    def _aggregate_bureau(self, df_bureau: pd.DataFrame) -> pd.DataFrame:
+    def _aggregate_bureau(df_bureau: pd.DataFrame, df_bb_agg: pd.DataFrame) -> pd.DataFrame:
         """
-        Агрегирует ежемесячные статусы просрочки из bureau_balance на уровень
-        каждого предыдущего кредита (SK_ID_BUREAU)
+        Агрегирует данные о предыдущих кредитах из Bureau на уровень клиента.
+        Также мержит агрегации из Bureau Balance.
 
-        :param df_bureau: Bureau Balance DataFrame
-        :return: aggregated Bureau Balance DataFrame
+        :param df_bureau: Bureau DataFrame
+        :param df_bb_agg: Aggregated Bureau Balance DataFrame
+        :return: aggregated Bureau features
         """
-        logger.debug("Aggregating Bureau Balance features...")
+        logger.debug("Aggregating Bureau features...")
 
-        # проверка на пустой датафрейм
         if df_bureau.empty:
-            logger.warning("Bureau Balance DataFrame is empty")
+            logger.warning("Bureau DataFrame is empty")
             return pd.DataFrame()
 
         try:
-            # --- 1 считаем частоту каждого статуса просрочки
-            df_bureau_agg = (
-                df_bureau
-                .groupby('SK_ID_BUREAU')['STATUS']
-                .value_counts(normalize=True)
-                .unstack(fill_value=0)
-            )
+            # --- 1. мержим с Bureau Balance агрегациями ---
+            if not df_bb_agg.empty:
+                df_bureau = df_bureau.merge(df_bb_agg, on='SK_ID_BUREAU', how='left')
+                logger.debug(f"Merged Bureau Balance into Bureau. Shape: {df_bureau.shape}")
 
-            # --- 2 переименовываем колонки
-            df_bureau_agg.columns = [f'BB_STATUS_PCT_{col}' for col in df_bureau_agg.columns]
+            # --- 2. выбираем числовые колонки для агрегации ---
+            num_cols = df_bureau.select_dtypes(include=[np.number]).columns.tolist()
+            # исключаем ID колонки
+            num_cols = [col for col in num_cols if col not in ['SK_ID_CURR', 'SK_ID_BUREAU']]
 
-            # --- 3 добавляем длину кредитной истории
-            df_bureau_agg['BB_HISTORY_LENGTH'] = df_bureau.groupby('SK_ID_BUREAU').size()
+            # --- 3. агрегируем на уровень клиента ---
+            agg_funcs = ['mean', 'max', 'min', 'sum']
+            agg_dict = {col: agg_funcs for col in num_cols}
+            # считаем количество кредитов
+            agg_dict['SK_ID_BUREAU'] = ['count']
 
-            logger.debug(f"Bureau Balance features created. Shape: {df_bureau_agg.shape}")
+            df_bureau_agg = df_bureau.groupby('SK_ID_CURR').agg(agg_dict)
+
+            # --- 4. переименовываем колонки ---
+            df_bureau_agg.columns = [
+                f'BUREAU_{col[0]}_{col[1].upper()}' if col[0] != 'SK_ID_BUREAU'
+                else 'BUREAU_CREDIT_COUNT'
+                for col in df_bureau_agg.columns
+            ]
+
+            logger.debug(f"Bureau aggregation complete. Created {len(df_bureau_agg.columns)} features")
+
             return df_bureau_agg.reset_index()
 
         except Exception as e:
-            logger.error(f"Error aggregating Bureau Balance: {e}", exc_info=True)
+            logger.error(f"Error aggregating Bureau: {e}", exc_info=True)
             raise
 
     @staticmethod
-    def _aggregate_previous_application(self, df_prev: pd.DataFrame) -> pd.DataFrame:
+    def _aggregate_previous_application(df_prev: pd.DataFrame) -> pd.DataFrame:
         """
-           Агрегирует данные о предыдущих заявках на уровень клиента
+        Агрегирует данные о предыдущих заявках на уровень клиента.
 
-           :param df_prev: Previous Application DataFrame
-           :return: Aggregated Previous Application features
-           """
+        :param df_prev: Previous Application DataFrame
+        :return: Aggregated Previous Application features
+        """
         logger.debug("Aggregating Previous Application features...")
 
         if df_prev.empty:
@@ -255,13 +279,22 @@ class AuxiliaryFeatureAggregator(BaseEstimator, TransformerMixin):
             logger.error(f"Error aggregating Previous Application: {e}", exc_info=True)
             raise
 
+
 class DataFrameCoercer(BaseEstimator, TransformerMixin):
+    """
+    Приводит типы данных к нужному формату перед обучением.
+    - Числовые колонки -> float/int
+    - Бинарные (Y/N) -> 0/1
+    - Категориальные -> оставляет как есть
+    """
+
     def __init__(self):
         self.non_numeric_cols: Optional[List[str]] = None
 
     def fit(self, X, y=None):
         # определяем нечисловые колонки для защиты от коэрции
         self.non_numeric_cols = X.select_dtypes(include=['object', 'category']).columns.tolist()
+
         # добавляем бинарные, которые могут быть 'Y'/'N'
         from src.config import BIN_CATEGORICAL_FEATURES
         self.non_numeric_cols.extend(BIN_CATEGORICAL_FEATURES)
@@ -282,6 +315,6 @@ class DataFrameCoercer(BaseEstimator, TransformerMixin):
                 X_out[col] = (
                     X_out[col]
                     .replace({'Y': 1, 'N': 0, 'y': 1, 'n': 0})
-                    # .fillna(0)  # заполнение пропусков в бинарных
                 )
+
         return X_out
