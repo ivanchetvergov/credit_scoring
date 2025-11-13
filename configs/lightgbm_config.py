@@ -7,18 +7,23 @@ MODEL_PARAMS = {
         'objective': 'binary',
         'metric': 'auc',
         'boosting_type': 'gbdt',
-        'n_estimators': 500,
-        'learning_rate': 0.05,
+
+        'n_estimators': 2000,
+        'learning_rate': 0.03,
         'n_jobs': -1,
-        'num_leaves': 10,
-        'min_child_samples': 50,
-        'reg_alpha': 0.1,
-        'reg_lambda': 0.1,
+
+        'num_leaves': 31,
+        'min_child_samples': 20,
+        'max_depth': 8,
+
+        'reg_alpha': 0.2,
+        'reg_lambda': 0.2,
         'colsample_bytree': 0.8,
         'subsample': 0.8,
-        'max_depth': 5,
+
+        # 'early_stopping_rounds' :150,
         # вес положительного класса ~ 11.4
         # 'is_unbalance': True
-        'scale_pos_weight': 20.0  # увеличим для лучшего Recall
+        'scale_pos_weight': 18.5  # увеличим для лучшего Recall
     },
 }

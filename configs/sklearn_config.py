@@ -8,18 +8,18 @@ CLASS_WEIGHT = {
 
 MODEL_PARAMS = {
     'logistic_regression': {
-        'penalty': 'l1',
-        'C': 0.5,
-        'solver': 'saga', # рекомендуется для L1 и больших данных
+        'penalty': 'l2',
+        'C': 1,
+        'solver': 'saga',
         'max_iter': 1000,
         'random_state': SEED,
         'class_weight': CLASS_WEIGHT
     },
     'random_forest': {
         'n_estimators': 420,
-        'max_depth': 12,
-        'min_samples_split': 60,
-        'min_samples_leaf': 20,
+        'max_depth': 8,
+        'min_samples_split': 100,
+        'min_samples_leaf': 40,
         'random_state': SEED,
         'class_weight': CLASS_WEIGHT,
         'n_jobs': -1,

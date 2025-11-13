@@ -6,7 +6,7 @@ from sklearn.preprocessing import OrdinalEncoder
 from xgboost.sklearn import XGBClassifier
 from sklearn.base import BaseEstimator
 
-from src.features.custom_transformers import FeatureSelector
+# from src.features.custom_transformers import FeatureSelector
 from src.pipelines.base_pipeline import BasePipelineBuilder
 from src.pipelines.base_preprocessor import (
     get_base_feature_engineering_steps,
@@ -47,7 +47,7 @@ def get_xgboost_preprocessing_pipeline(include_feature_engineering: bool = True)
     if include_feature_engineering:
         steps.extend(get_base_feature_engineering_steps())
 
-    steps.append(('feature_selector', FeatureSelector(feature_list=ALL_SELECTED_FEATURES)))
+    # steps.append(('feature_selector', FeatureSelector(feature_list=ALL_SELECTED_FEATURES)))
 
     cat_pipe = Pipeline(steps=[
         ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
