@@ -1,7 +1,7 @@
 # src/models/xgboost_trainer.py
 from xgboost.sklearn import XGBClassifier
-from xgboost.callback import EarlyStopping
 from src.models.trainer_interface import BaseTrainer
+from src.features.pipelines import get_preprocessing_pipeline
 from sklearn.pipeline import Pipeline
 from typing import Optional, Dict, Tuple, Any
 import numpy as np
@@ -25,25 +25,24 @@ class XGBoostTrainer(BaseTrainer):
         """
         Переопределение метода train для добавления аргументов для ранней остановки.
         """
-        # 1. извлекаем необходимое количество раундов из конфига
-        stop_rounds = self.model_params.get('early_stopping_rounds', 200)
+        fit_kwargs = fit_kwargs or {}
+        preprocessor_for_test_transform = get_preprocessing_pipeline()
 
-        # 2. cоздаем callback для ранней остановки
-        early_stop = EarlyStopping(
-            rounds=stop_rounds,
-            save_best=True,
-            metric_name='auc',      # указываем метрику для мониторинга
-            data_name='validation'  # имя eval_set, которое мы передадим ниже
-        )
+        # 1. обучаем препроцессор ТОЛЬКО на X_train
+        preprocessor_for_test_transform.fit(X_train)
 
-        fit_kwargs = {
-            # 3. early Stopping: X_test используется как eval_set
+        # 2. трансформируем X_test, используя статистики, полученные ИЗ X_train
+        X_test_transformed = preprocessor_for_test_transform.transform(X_test)
+
+        # 3. создаем fit_kwargs с ПРЕОБРАЗОВАННЫМИ данными
+        final_fit_kwargs = {
             'model__eval_set': [(X_test, y_test)],
-            'model__callbacks': [early_stop],
             'model__verbose': False
         }
 
-        # вызываем родительский метод с дополнительными аргументами
+        fit_kwargs.update(final_fit_kwargs)
+        print("DEBUG: Final fit_kwargs for XGBoost:", fit_kwargs)
+
         return super().train(
             X_train=X_train,
             y_train=y_train,
