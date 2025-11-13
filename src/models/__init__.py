@@ -15,7 +15,7 @@ MODEL_TRAINERS_REGISTRY = {
     'sgd_classifier': SklearnTrainer,
     'lightgbm': LGBMTrainer,
     'catboost': CatBoostTrainer,
-    'xgboost': XGBoostTrainer,
+    # 'xgboost': XGBoostTrainer, # пока не работает хз
 }
 
 # добавляем список доступных моделей
