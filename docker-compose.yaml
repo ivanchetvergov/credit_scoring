@@ -1,0 +1,21 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  # единственный сервис - ML-пайплайн
+  ml_trainer:
+    # инструкция для Docker Compose: собрать образ из Dockerfile в текущей директории.
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # имя контейнера для удобства
+    container_name: credit_ml
+
+    volumes:
+      # /app/data в контейнере ссылается на ./data на хосте
+      - ./data:/app/data
+      # /app/results в контейнере ссылается на ./results на хосте
+      - ./results:/app/results
+      # /app/configs в контейнере ссылается на ./configs на хосте - для тюнинга
+      - ./configs:/app/configs

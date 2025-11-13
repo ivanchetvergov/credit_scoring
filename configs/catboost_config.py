@@ -10,7 +10,7 @@ MODEL_PARAMS = {
         'random_state': SEED,
         'loss_function': 'Logloss',
         'eval_metric': 'AUC',
-        'scale_pos_weight': 18.5,  # отношение (негативные / позитивные)
+        'scale_pos_weight': 20,  # отношение (негативные / позитивные)
 
         # настройки обучения
         'learning_rate': 0.035,      # чуть ниже, для лучшего использования early stopping
