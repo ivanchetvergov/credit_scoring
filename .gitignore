@@ -14,7 +14,7 @@ data/raw/*
 data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
-catboost_info/*
+catboost_info/
 
 saved_models/
 *.joblib

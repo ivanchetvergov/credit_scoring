@@ -71,57 +71,68 @@ pip install -r requirements.txt
 | Быстрый тест          | `python scripts/baseline_training.py --no-cv`          | Запускает все 6 моделей, но пропускает CV.                       |
 | Фокусированный тюнинг | `python scripts/baseline_training.py catboost xgboost` | Обучение только указанных моделей.                               |
 
-# 5. Структура проекта (расширенная)
+# 5. Структура проекта
 ```bash
 .
 ├── Dockerfile
+├── EDA
+│   └── data_types.py
 ├── Makefile
 ├── README.md
 ├── app
-│   ├── main.py
-│   └── schemas.py
+│   ├── main.py
+│   └── schemas.py
 ├── configs
-│   ├── __init__.py
-│   ├── catboost_config.py
-│   ├── lightgbm_config.py
-│   ├── processeed_features_config.py
-│   ├── raw_features_config.py
-│   ├── sklearn_config.py
-│   └── xgboost_config.py
+│   ├── __init__.py
+│   ├── catboost_config.py
+│   ├── lightgbm_config.py
+│   ├── processeed_features_config.py
+│   ├── raw_features_config.py
+│   ├── sklearn_config.py
+│   └── xgboost_config.py
 ├── requirements.txt
 ├── results
-│   ├── baseline_comparison.csv
-│   ├── feature_order.json
-│   ├── lightgbm_metrics.joblib
-│   ├── logistic_regression_metrics.joblib
-│   └── random_forest_metrics.joblib
+│   ├── baseline_comparison.csv
+│   ├── catboost_metrics.joblib
+│   ├── lightgbm_metrics.joblib
+│   ├── logistic_regression_metrics.joblib
+│   ├── random_forest_metrics.joblib
+│   └── sgd_classifier_metrics.joblib
 ├── scripts
-│   ├── __init__.py
-│   ├── feature_selection.py
-│   ├── generate_features_config.py
-│   └── train_model.py
+│   ├── __init__.py
+│   ├── feature_selection.py
+│   ├── generate_features_config.py
+│   └── train_model.py
 ├── src
-│   ├── __init__.py
-│   ├── config.py
-│   ├── features
-│   │   ├── __init__.py
-│   │   ├── custom_transformers.py
-│   │   ├── data_helpers.py
-│   │   ├── feature_engineering.py
-│   │   └── pipelines.py
-│   ├── models
-│   │   ├── __init__.py
-│   │   ├── catboost_trainer.py
-│   │   ├── lightgbm_trainer.py
-│   │   ├── sklearn_trainer.py
-│   │   ├── trainer_interface.py
-│   │   └── xgboost_trainer.py
-│   └── reporting
-│       ├── __init__.py
-│       └── compare_models.py
+│   ├── __init__.py
+│   ├── config.py
+│   ├── features
+│   │   ├── __init__.py
+│   │   ├── custom_transformers.py
+│   │   ├── data_helpers.py
+│   │   └── feature_engineering.py
+│   ├── models
+│   │   ├── __init__.py
+│   │   ├── catboost_trainer.py
+│   │   ├── lightgbm_trainer.py
+│   │   ├── sklearn_trainer.py
+│   │   ├── torch_models
+│   │   ├── trainer_interface.py
+│   │   └── xgboost_trainer.py
+│   ├── pipelines
+│   │   ├── __init__.py
+│   │   ├── base_pipeline.py
+│   │   ├── base_preprocessor.py
+│   │   ├── catboost_pipeline.py
+│   │   ├── lightgbm_pipeline.py
+│   │   ├── sklearn_pipeline.py
+│   │   └── xgboost_pipeline.py
+│   └── reporting
+│       ├── __init__.py
+│       └── compare_models.py
 └── tests
 
-10 directories, 37 files
+17 directories, 52 files
 ```
 
 # 6. Feature Engineering (сложные признаки)
