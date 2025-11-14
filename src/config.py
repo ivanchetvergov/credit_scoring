@@ -67,6 +67,7 @@ from configs.catboost_config import MODEL_PARAMS as CATBOOST_PARAMS
 from configs.lightgbm_config import MODEL_PARAMS as LGBM_PARAMS
 from configs.sklearn_config import MODEL_PARAMS as SKLEARN_PARAMS
 from configs.xgboost_config  import MODEL_PARAMS as XGBoost_PARAMS
+from configs.torch_config import MODEL_PARAMS as TORCH_PARAMS
 
 
 # --- ГЛОБАЛЬНЫЙ КАТАЛОГ ПАРАМЕТРОВ ---
@@ -75,6 +76,7 @@ MODEL_PARAMS.update(CATBOOST_PARAMS)
 MODEL_PARAMS.update(LGBM_PARAMS)
 MODEL_PARAMS.update(SKLEARN_PARAMS)
 MODEL_PARAMS.update(XGBoost_PARAMS)
+MODEL_PARAMS.update(TORCH_PARAMS)
 
 # =================================== #
  #  4 настройки для обработки данных #

@@ -5,14 +5,10 @@ from pathlib import Path
 import sys
 from typing import List, Dict, Any
 
-from src.models import MODEL_TRAINERS_REGISTRY, AVAILABLE_MODELS, BaseTrainer, SklearnTrainer
+from src.models import MODEL_TRAINERS_REGISTRY, AVAILABLE_MODELS, BaseTrainer, SklearnTrainer, PyTorchTrainer
+from src.nn_models import PyTorchTrainer
 from src.reporting.compare_models import compare_models
 from sklearn.model_selection import train_test_split
-
-sys.path.append(str(Path(__file__).resolve().parent.parent))
-
-import warnings
-warnings.filterwarnings(action='ignore')
 
 from src.config import (
     FEATURE_STORE_PATH,
@@ -21,6 +17,10 @@ from src.config import (
     SEED,
     TEST_SIZE
 )
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
+import warnings
+warnings.filterwarnings(action='ignore')
 
 logging.basicConfig(
     level=logging.INFO,
@@ -68,10 +68,10 @@ def train_single_model(
         logger.info(f"Training model: {model_name}")
         logger.info(f"{'='*60}")
 
-        # 1. получаем класс тренера (CatBoostTrainer, LGBMTrainer, и т.д.)
+        # 1. получаем класс тренера (CatBoostTrainer, LGBMTrainer, PyTorchTrainer и т.д.)
         TrainerClass = MODEL_TRAINERS_REGISTRY[model_name]
 
-        if TrainerClass is SklearnTrainer:
+        if TrainerClass in (SklearnTrainer, PyTorchTrainer):
             trainer = TrainerClass(model_name=model_name)
         else:
             trainer = TrainerClass()
