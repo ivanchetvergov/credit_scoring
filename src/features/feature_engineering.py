@@ -1,122 +1,80 @@
 # src/features/feature_engineering.py
 import pandas as pd
 import logging
-from typing import Optional, Dict
+from typing import Dict
 
 from src.config import (
-    DATA_DIR,
-    MAIN_TRAIN_FILE,
-    AUX_DATA_FILES,
-    PROCESSED_DATA_DIR,
-    FEATURE_STORE_PATH
+    DATA_DIR, MAIN_TRAIN_FILE, AUX_DATA_FILES,
+    PROCESSED_DATA_DIR, FEATURE_STORE_PATH
+)
+from src.features.custom_transformers import (
+    FeatureCreator,
+    AuxiliaryFeatureAggregator
 )
 
-from src.features.custom_transformers import AuxiliaryFeatureAggregator
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# --- вспомогательные функции для I/O ---
-
-def _load_data_file(filename: str, file_key: Optional[str] = None) -> pd.DataFrame:
-    """
-    Загружает CSV файл с обработкой ошибок.
-    """
+def _load_data_file(filename: str, file_key: str = None) -> pd.DataFrame:
     file_path = DATA_DIR / filename
-    file_desc = file_key if file_key else filename
-
-    logger.info(f"Loading {file_desc}: {filename}")
-
+    logger.info(f"Loading {file_key or filename}")
     try:
         df = pd.read_csv(file_path)
-        logger.info(f"{file_desc} shape: {df.shape}")
+        logger.info(f"Shape: {df.shape}")
         return df
-
-    except FileNotFoundError:
-        logger.error(f"File not found: {file_path}")
-        raise
     except Exception as e:
-        logger.error(f"Error loading {file_desc}: {e}", exc_info=True)
+        logger.error(f"Error loading {filename}: {e}")
         raise
 
 
 def _load_all_data() -> Dict[str, pd.DataFrame]:
-    """
-    Загружает все необходимые датафреймы в словарь.
-    """
-    # 1. загрузка основного файла
-    data = {'main': _load_data_file(
-        MAIN_TRAIN_FILE, "Main application data"
-    )}
-
-    # 2. загрузка вспомогательных файлов
-    for key, filename in AUX_DATA_FILES.items():
-        data[key] = _load_data_file(filename, key)
-
+    data = {'main': _load_data_file(MAIN_TRAIN_FILE, "Main")}
+    for key, fname in AUX_DATA_FILES.items():
+        data[key] = _load_data_file(fname, key)
     return data
 
 
-# --- главная функция Feature Store ---
-
 def create_feature_store(save: bool = True) -> pd.DataFrame:
-    """
-    Главная функция feature engineering'a: загрузка, агрегация, слияние
-    и сохранение feature_store.
-
-    ИСПРАВЛЕНО: теперь использует fit_transform вместо просто transform.
-    """
     logger.info("=" * 80)
-    logger.info("Starting Feature Store creation...")
+    logger.info("Creating Feature Store (RAW → FEATURES)")
     logger.info("=" * 80)
 
     try:
-        # --- 1 загрузка данных ---
+        # 1. Load raw data
         data = _load_all_data()
-        df_app = data.pop('main')  # Основной датафрейм (база)
+        df_app = data.pop('main')
 
-        # --- 2 агрегация и слияние (ИСПОЛЬЗУЕМ ТРАНСФОРМЕР) ---
-        logger.info("Starting Auxiliary Feature Aggregation...")
+        # 2. feature creation
+        logger.info("Creating features...")
+        fc = FeatureCreator(
+            anomaly_value=365243,  # DAYS_EMPLOYED sentinel
+            epsilon=1e-3
+        )
+        df_app = fc.fit_transform(df_app)
+        logger.info(f"Created {len(fc.created_features_)} features")
 
-        # инициализируем агрегатор с загруженными вспомогательными данными
+        # 3. Auxiliary aggregations (bureau, prev_app)
+        logger.info("Aggregating auxiliary tables...")
         aggregator = AuxiliaryFeatureAggregator(aux_data=data)
-
-        # используем fit_transform вместо просто transform
         df_final = aggregator.fit_transform(df_app)
+        logger.info(f"Final shape: {df_final.shape}")
 
-        logger.info(f"Feature Aggregation complete. Final shape: {df_final.shape}")
-
-        # --- 3 сохранение Feature Store ---
+        # 4. Save
         if save:
             PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
-            # используем Parquet, как более эффективный формат для Feature Store
             df_final.to_parquet(FEATURE_STORE_PATH, index=False)
+            logger.info(f"Saved to {FEATURE_STORE_PATH}")
 
-            logger.info("=" * 80)
-            logger.info(f"Feature store created successfully!")
-            logger.info(f"Final shape: {df_final.shape}")
-            logger.info(f"Saved to: {FEATURE_STORE_PATH}")
-            logger.info("=" * 80)
-        else:
-            logger.info("Feature store created but not saved (save=False)")
-
+        logger.info("=" * 80)
         return df_final
 
     except Exception as e:
-        logger.error(f"Error creating feature store: {e}", exc_info=True)
+        logger.error(f"Error: {e}", exc_info=True)
         raise
 
 
 if __name__ == '__main__':
     df = create_feature_store()
-
-    # показываем статистику
-    print("\n" + "=" * 80)
-    print("FEATURE STORE STATISTICS")
-    print("=" * 80)
-    print(f"\nTotal features: {len(df.columns)}")
-    print(f"Total samples: {len(df)}")
-    print(f"\nMissing values per feature (top 10):")
-    print(df.isnull().sum().sort_values(ascending=False).head(10))
-    print(f"\nTarget distribution:")
-    print(df['TARGET'].value_counts(normalize=True))
+    print(f"\nFeatures: {len(df.columns)}, Samples: {len(df)}")
+    print(f"\nTarget distribution:\n{df['TARGET'].value_counts(normalize=True)}")
