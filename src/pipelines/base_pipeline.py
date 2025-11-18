@@ -1,6 +1,6 @@
 # src/pipelines/base_pipeline.py
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
 from sklearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator
 
@@ -32,7 +32,6 @@ class BasePipelineBuilder(ABC):
         """
         return Pipeline(
             steps=[
-                # трансформеры инициализируются с параметрами по умолчанию
                 ('coercer_pre', DataFrameCoercer()),
                 ('anomaly_handler', AnomalyHandler()),
                 ('feature_creator', FeatureCreator()),
@@ -58,12 +57,10 @@ class BasePipelineBuilder(ABC):
         """
         Собирает финальный пайплайн.
         """
-        # используем новый аргумент feature_engineering
         preprocessor_pipe = self._get_preprocessor(feature_engineering=feature_engineering)
         model = self._get_model()
 
-        # добавляем модель к уже существующим шагам препроцессора
-        steps = preprocessor_pipe.steps
-        steps.append(('model', model))
-
-        return Pipeline(steps)
+        return Pipeline(steps=[
+            'preprocessor', preprocessor_pipe,
+            'model', model
+        ])

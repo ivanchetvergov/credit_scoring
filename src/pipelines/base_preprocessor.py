@@ -1,58 +1,60 @@
-# src/preprocessors/base_prep.py
+# src/pipelines/base_preprocessor.py
 
 """
 Содержит базовые, переиспользуемые трансформеры (num, cat, bin)
 и стандартные шаги Feature Engineering.
 """
+from typing import Optional, List, Sequence, Dict
+
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder, OrdinalEncoder
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, PowerTransformer, RobustScaler
+from sklearn.decomposition import PCA
+from sklearn.compose import ColumnTransformer
+
 from src.features.custom_transformers import (
     AnomalyHandler,
     FeatureCreator,
-    DataFrameCoercer
+    DataFrameCoercer,
+    CVTargetEncoder
 )
-from src.config import MAX_CATEGORIES_FOR_OHE
+from src.config import MAX_CATEGORIES_FOR_OHE, SEED
+
 
 # ==============================================================================
 # БАЗОВЫЕ КОМПОНЕНТЫ
 # ==============================================================================
 
-def get_numerical_transformer(scaled: bool = True) -> Pipeline:
+def get_numerical_transformer(scaled: bool = True,
+                              use_pca: bool = False,
+                              pca_variance: float = 0.95) -> Pipeline:
     """Пайплайн для числовых признаков: импутация медианой, опционально масштабирование."""
-    steps = [('imputer', SimpleImputer(strategy='median'))]
+    steps = [('imputer', SimpleImputer(strategy='median')),
+             ('power_transform', PowerTransformer(method='yeo-johnson'))]
     if scaled:
-        steps.append(('scaler', StandardScaler()))
+        steps.append(('scaler', RobustScaler()))
+    if use_pca:
+        steps.append(('pca', PCA(n_components=pca_variance, random_state=SEED)))
+
     return Pipeline(steps=steps)
 
-
-def get_categorical_transformer(max_categories: int = None) -> Pipeline:
-    """Пайплайн для категориальных признаков: импутация 'missing' -> OHE."""
-    if max_categories is None:
-        max_categories = MAX_CATEGORIES_FOR_OHE
-
-    return Pipeline(steps=[
-        ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
-        ('onehot', OneHotEncoder(
-            handle_unknown='ignore',
-            sparse_output=False,
-            drop='first',
-            max_categories=max_categories
-        ))
-    ])
-
-
-def get_categorical_type_transformer() -> Pipeline:
+def get_categorical_transformer(use_target_enc: bool = True,
+                                max_categories: Optional[int] = MAX_CATEGORIES_FOR_OHE,
+                                n_splits: int = 5) -> Pipeline:
     """Пайплайн для категориальных признаков: импутация -> приведение к 'category'."""
     # Используем OrdinalEncoder, чтобы превратить строки в числа,
 
-    return Pipeline(steps=[
-        ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
-        ('onehot', OneHotEncoder(
-            handle_unknown='ignore',
-            sparse_output=False,
-        ))
-    ])
+    if use_target_enc:
+        return Pipeline(steps=[
+            ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
+            ('target_enc', CVTargetEncoder(n_splits=n_splits, random_state=SEED))
+        ])
+    else:
+        return Pipeline(steps=[
+            ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
+            ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False,
+                                     max_categories=max_categories))
+        ])
 
 def get_binary_transformer() -> Pipeline:
     """Пайплайн для бинарных признаков (без кодирования, только импутация)."""
@@ -76,3 +78,21 @@ def get_base_feature_engineering_steps() -> list:
         ('anomaly_handler', AnomalyHandler()),
         ('feature_creator', FeatureCreator()),
     ]
+
+
+def build_column_preprocessor(numerical_cols: Sequence[str],
+                              categorical_cols: Sequence[str],
+                              binary_cols: Sequence[str],
+                              use_target_enc: bool = True,
+                              numeric_scaled: bool = True) -> ColumnTransformer:
+    """
+    Build a ColumnTransformer assembling numerical, categorical and binary pipelines.
+    This gives a single preprocessor suitable for model training and is easier to
+    extend/inspect than ad-hoc step lists.
+    """
+    transformers = [
+        ('num', get_numerical_transformer(scaled=numeric_scaled), list(numerical_cols)),
+        ('cat', get_categorical_transformer(use_target_enc=use_target_enc), list(categorical_cols)),
+        ('bin', get_binary_transformer(), list(binary_cols)),
+    ]
+    return ColumnTransformer(transformers=transformers, remainder='passthrough')
