@@ -5,11 +5,9 @@ from sklearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator
 
 # импорты для Feature Engineering (FE)
-from src.features.custom_transformers import (
-    AnomalyHandler,
-    FeatureCreator,
-    DataFrameCoercer
-)
+from src.features.transformers.dataframe_coercer import DataFrameCoercer
+from src.features.transformers.feature_creator import FeatureCreator
+from src.features.transformers.anomaly_handler import AnomalyHandler
 from src.config import SEED
 
 

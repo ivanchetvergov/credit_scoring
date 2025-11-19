@@ -6,16 +6,15 @@ from sklearn.preprocessing import OrdinalEncoder
 from xgboost.sklearn import XGBClassifier
 from sklearn.base import BaseEstimator
 
-# from src.features.custom_transformers import FeatureSelector
+from src.config import NUMERICAL_FEATURES, CATEGORICAL_FEATURES, BIN_CATEGORICAL_FEATURES
 from src.pipelines.base_pipeline import BasePipelineBuilder
 from src.pipelines.base_preprocessor import (
     get_base_feature_engineering_steps,
     get_numerical_transformer,
     get_binary_transformer
 )
-from src.config import NUMERICAL_FEATURES, CATEGORICAL_FEATURES, BIN_CATEGORICAL_FEATURES
 
-ALL_SELECTED_FEATURES = NUMERICAL_FEATURES + CATEGORICAL_FEATURES + BIN_CATEGORICAL_FEATURES
+# ALL_SELECTED_FEATURES = NUMERICAL_FEATURES + CATEGORICAL_FEATURES + BIN_CATEGORICAL_FEATURES
 
 
 class XGBoostPipelineBuilder(BasePipelineBuilder):

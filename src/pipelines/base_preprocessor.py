@@ -12,12 +12,10 @@ from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, PowerTransforme
 from sklearn.decomposition import PCA
 from sklearn.compose import ColumnTransformer
 
-from src.features.custom_transformers import (
-    AnomalyHandler,
-    FeatureCreator,
-    DataFrameCoercer,
-    CVTargetEncoder
-)
+from src.features.transformers.cv_target_encoder import CVTargetEncoder
+from src.features.transformers.dataframe_coercer import DataFrameCoercer
+from src.features.transformers.feature_creator import FeatureCreator
+from src.features.transformers.anomaly_handler import AnomalyHandler
 from src.config import MAX_CATEGORIES_FOR_OHE, SEED
 
 

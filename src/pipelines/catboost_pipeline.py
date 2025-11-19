@@ -3,7 +3,7 @@
 from catboost import CatBoostClassifier
 from sklearn.pipeline import Pipeline
 
-from src.features.custom_transformers import IdentityTransformer
+from src.features import IdentityTransformer
 from src.pipelines.base_pipeline import BasePipelineBuilder
 from configs.catboost_config import CAT_FEATURES_COLS
 

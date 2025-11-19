@@ -7,7 +7,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder
 
-from configs.processeed_features_config import NUMERICAL_FEATURES, CATEGORICAL_FEATURES, BIN_CATEGORICAL_FEATURES
+from src.config import NUMERICAL_FEATURES, CATEGORICAL_FEATURES, BIN_CATEGORICAL_FEATURES
 from src.pipelines.base_pipeline import BasePipelineBuilder
 from src.pipelines.base_preprocessor import get_base_feature_engineering_steps, get_binary_encoder
 
