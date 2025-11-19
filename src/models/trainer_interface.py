@@ -82,6 +82,33 @@ class BaseTrainer(ABC):
             'roc_auc': roc_auc_score(y_true, y_pred_proba)
         }
 
+    def _prepare_data(self, X, y=None, is_train: bool = True):
+        """Hook for per-model data preparation. Default: no-op."""
+        return X
+
+    def _build_preprocessor(self, external_preprocessor: Optional[Pipeline] = None) -> Pipeline:
+        """Selects preprocessing pipeline, allowing child overrides."""
+        if external_preprocessor is not None:
+            logger.info(f"Using external preprocessor for {self.model_name}.")
+            return external_preprocessor
+        return get_model_specific_pipeline(
+            model_name=self.model_name,
+            include_feature_engineering=True
+        )
+
+    def _build_fit_kwargs(
+            self,
+            fit_kwargs: Optional[Dict],
+            *,
+            X_train,
+            y_train,
+            X_test,
+            y_test,
+            preprocessor: Pipeline
+    ) -> Dict:
+        """Allows trainers to inject model-specific fit kwargs."""
+        return dict(fit_kwargs or {})
+
     def train(
             self,
             X_train: Any,
@@ -93,24 +120,16 @@ class BaseTrainer(ABC):
     ) -> Tuple[Pipeline, Dict[str, Any]]:
         """
         Обучает модель и оценивает на тестовой выборке.
-
-        УЛУЧШЕНО: автоматически выбирает оптимальный препроцессор под модель.
         """
         logger.info('=' * 80)
         logger.info(f"Training {self.model_name} model...")
         logger.info('=' * 80)
 
         try:
-            if external_preprocessor:
-                preprocessor = external_preprocessor
-                # в CatBoost мы должны передать препроцессор, который не включает FE-шаги.
-                logger.info(f"Using external preprocessor for {self.model_name}.")
-            else:
-                # если не передан, используем фабрику (для Sklearn, LGBM, XGBoost)
-                preprocessor = get_model_specific_pipeline(
-                    model_name=self.model_name,
-                    include_feature_engineering=True
-                )
+            X_train_prepared = self._prepare_data(X_train, y_train, is_train=True)
+            X_test_prepared = self._prepare_data(X_test, y_test, is_train=False)
+
+            preprocessor = self._build_preprocessor(external_preprocessor)
             model = self._get_model()
 
             self.pipeline = Pipeline([
@@ -118,38 +137,44 @@ class BaseTrainer(ABC):
                 ('model', model)
             ])
 
-            fit_kwargs = fit_kwargs or {}
+            # Log feature count after preprocessing
+            try:
+                X_train_transformed = self.pipeline.named_steps['preprocessor'].fit_transform(X_train_prepared, y_train)
+                logger.info(f"Model '{self.model_name}' is training on {X_train_transformed.shape[1]} features.")
+            except Exception as fe:
+                logger.warning(f"Could not determine feature count after preprocessing: {fe}")
 
-            # обучение
-            logger.info(f"Fitting model with kwargs: {list(fit_kwargs.keys())}...")
-            self.pipeline.fit(X_train, y_train, **fit_kwargs)
+            final_fit_kwargs = self._build_fit_kwargs(
+                fit_kwargs,
+                X_train=X_train_prepared,
+                y_train=y_train,
+                X_test=X_test_prepared,
+                y_test=y_test,
+                preprocessor=preprocessor
+            )
 
-            # предсказание на train
+            logger.info(f"Fitting model with kwargs: {list(final_fit_kwargs.keys())}...")
+            self.pipeline.fit(X_train_prepared, y_train, **final_fit_kwargs)
+
             logger.info("Evaluating on train set...")
-            y_train_pred = self.pipeline.predict(X_train)
-            y_train_probas = self.pipeline.predict_proba(X_train)[:, 1]
+            y_train_pred = self.pipeline.predict(X_train_prepared)
+            y_train_probas = self.pipeline.predict_proba(X_train_prepared)[:, 1]
             train_metrics = self._calculate_metrics(y_train, y_train_pred, y_train_probas)
 
-            # предсказание на test
             logger.info("Evaluating on test set...")
-            y_test_pred = self.pipeline.predict(X_test)
-            y_test_probas = self.pipeline.predict_proba(X_test)[:, 1]
+            y_test_pred = self.pipeline.predict(X_test_prepared)
+            y_test_probas = self.pipeline.predict_proba(X_test_prepared)[:, 1]
             test_metrics = self._calculate_metrics(y_test, y_test_pred, y_test_probas)
 
-            # сохраняем метрики
             self.metrics.update({
                 'train': train_metrics,
                 'test': test_metrics,
                 'confusion_matrix': confusion_matrix(y_test, y_test_pred).tolist()
             })
 
-            # НОВОЕ: извлекаем Feature Importance, если доступно
             self._extract_feature_importance()
-
-            # логируем результаты
             self._log_results()
 
-            # classification report
             logger.info("\nClassification Report (Test):")
             logger.info("\n" + classification_report(y_test, y_test_pred))
 
@@ -170,11 +195,7 @@ class BaseTrainer(ABC):
                 random_state=SEED
             )
 
-            # УЛУЧШЕНО: используем фабричную функцию
-            preprocessor = get_model_specific_pipeline(
-                model_name=self.model_name,
-                include_feature_engineering=True
-            )
+            preprocessor = self._build_preprocessor()
             model = self._get_model()
 
             pipeline = Pipeline([
@@ -216,18 +237,12 @@ class BaseTrainer(ABC):
                 importances = model.feature_importances_
 
                 # получаем названия фичей после препроцессинга
-                from src.features.data_helpers import get_feature_names
                 preprocessor_pipeline = self.pipeline.named_steps['preprocessor']
 
-                # ищем ColumnTransformer в пайплайне
-                column_transformer = None
-                for step_name, step in preprocessor_pipeline.named_steps.items():
-                    if hasattr(step, 'transformers_'):
-                        column_transformer = step
-                        break
-
-                if column_transformer:
-                    feature_names = get_feature_names(column_transformer)
+                if hasattr(preprocessor_pipeline, 'transformers_'):
+                    feature_names = get_feature_names(preprocessor_pipeline)
+                else:
+                    feature_names = self.feature_names_
 
                     # сохраняем только топ-20 для краткости
                     top_n = min(20, len(importances))

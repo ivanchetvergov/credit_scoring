@@ -13,11 +13,11 @@ from ..nn_models.torch_trainer import PyTorchTrainer
 MODEL_TRAINERS_REGISTRY = {
     'logistic_regression': SklearnTrainer,
     'random_forest': SklearnTrainer,
-    'sgd_classifier': SklearnTrainer,
+    # 'sgd_classifier': SklearnTrainer,
     'lightgbm': LGBMTrainer,
     'catboost': CatBoostTrainer,
     'simple_mlp': PyTorchTrainer,
-    # 'xgboost': XGBoostTrainer, # пока не работает хз
+    'xgboost': XGBoostTrainer,
 }
 
 # добавляем список доступных моделей
