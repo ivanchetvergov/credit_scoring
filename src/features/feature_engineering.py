@@ -7,10 +7,8 @@ from src.config import (
     DATA_DIR, MAIN_TRAIN_FILE, AUX_DATA_FILES,
     PROCESSED_DATA_DIR, FEATURE_STORE_PATH
 )
-from src.features.custom_transformers import (
-    FeatureCreator,
-    AuxiliaryFeatureAggregator
-)
+from src.features.transformers.auxiliary_aggregator import AuxiliaryFeatureAggregator
+from src.features.transformers.feature_creator import FeatureCreator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -21,6 +21,7 @@ class AuxiliaryFeatureAggregator(BaseEstimator, TransformerMixin):
         :param aux_data: Словарь вспомогательных датафреймов.
                          Пример: {'bureau': df_bureau, 'bureau_balance': df_bb, ...}
         """
+        self._fitted_stats = None
         self.aux_data = aux_data or {}
         self.bureau_agg_ = None
         self.prev_agg_ = None
@@ -36,25 +37,25 @@ class AuxiliaryFeatureAggregator(BaseEstimator, TransformerMixin):
         return x.quantile(0.75)
 
     def fit(self, X: pd.DataFrame, y=None):
+        self._fitted_stats = []
         logger.info("Fitting AuxiliaryFeatureAggregator...")
 
-        # --- 1. агрегация Bureau Balance ---
         df_bb = self.aux_data.get('bureau_balance', pd.DataFrame())
         df_bb_agg = self._aggregate_bureau_balance(df_bb)
 
-        # --- 2. агрегация Bureau ---
         df_bureau = self.aux_data.get('bureau', pd.DataFrame())
         self.bureau_agg_ = self._aggregate_bureau(df_bureau, df_bb_agg)
 
-        # --- 3. агрегация Previous Application ---
         df_prev = self.aux_data.get('previous_application', pd.DataFrame())
         self.prev_agg_ = self._aggregate_previous_application(df_prev)
 
         logger.info("AuxiliaryFeatureAggregator fitted successfully")
+        return self
+
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         """
         Применяет предвычисленные агрегации через merge.
         """
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         if not isinstance(X, pd.DataFrame):
             X = pd.DataFrame(X)
         X_out = X.copy()
