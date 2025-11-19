@@ -13,6 +13,10 @@ PROCESSED_DATA_DIR = BASE_DIR / 'data' / "processed"
 SAVED_MODELS_DIR = BASE_DIR / 'saved_models'
 RESULTS_DIR = BASE_DIR / 'results'
 
+FEATURE_STORE = Path("data/processed/feature_store.parquet")
+CONFIG_PATH = Path("configs/raw_features_config.py")
+PIPELINE_PATH = Path("models/pipeline.joblib")
+
 # основной файл данных
 MAIN_TRAIN_FILE = "application_train.csv"
 
@@ -35,12 +39,10 @@ MODEL_PATH = SAVED_MODELS_DIR / MODEL_PIPELINE_NAME
 #  2 определение признаков  #
 # ========================= #
 
-
-
 TARGET_COLUMN = "TARGET"
 ID_COLUMN = "SK_ID_CURR"
 
-# базовые не обработанные 338 фичей
+# итоговые обработанные фичи (после feature engineering)
 from configs.raw_features_config import (
     NUMERICAL_FEATURES,
     CATEGORICAL_FEATURES,
@@ -61,6 +63,7 @@ from configs.raw_features_config import (
 SEED = 42
 TEST_SIZE = 0.25
 CV_FOLDS = 5
+SCALE_POS_WEIGHT = 15  # глобальный коэффициент для дисбаланса классов
 
 # --- ИМПОРТ ПАРАМЕТРОВ ---
 from configs.catboost_config import MODEL_PARAMS as CATBOOST_PARAMS
