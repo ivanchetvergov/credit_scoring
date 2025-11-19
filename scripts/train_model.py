@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 from typing import List, Dict, Any
 
-from src.models import MODEL_TRAINERS_REGISTRY, AVAILABLE_MODELS, BaseTrainer, SklearnTrainer, PyTorchTrainer
+from src.models import MODEL_TRAINERS_REGISTRY, AVAILABLE_MODELS, BaseTrainer, SklearnTrainer
 from src.nn_models import PyTorchTrainer
 from src.reporting.compare_models import compare_models
 from sklearn.model_selection import train_test_split
