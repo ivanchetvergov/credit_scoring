@@ -1,4 +1,4 @@
-from src.config import SEED
+from src.config import SEED, SCALE_POS_WEIGHT
 
 MODEL_PARAMS = {
     'simple_mlp': {
@@ -14,7 +14,7 @@ MODEL_PARAMS = {
         'loss_function': 'BCEWithLogitsLoss',  # Функция потерь для бинарной классификации
 
         # Обработка дисбаланса (весовой коэффициент для положительного класса)
-        'pos_weight': 20.0,
+        'pos_weight': SCALE_POS_WEIGHT,
 
         'random_state': SEED,
         'early_stopping_patience': 10,  # Пациентность для ранней остановки
