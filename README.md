@@ -1,157 +1,135 @@
-# Кредитный дефолт:  ML-пайплайн
+# Кредитный дефолт — ML-пайплайн
 
-Проект для предсказания риска дефолта по кредиту на основе данных Home Credit. Этот пайплайн создан с фокусом на **воспроизводимость, масштабируемость** и достижение максимального ROC-AUC на сильно **несбалансированных данных**.
+Проект решает задачу бинарной классификации дефолта заемщика Home Credit. Репозиторий содержит полный цикл: от подготовки признаков до обучения нескольких моделей и сохранения артефактов для дальнейшего инференса.
 
----
+## Архитектура и ключевые сущности
 
-## 1. Описание и ключевые возможности
+| Слой | Роль | Основные файлы |
+| --- | --- | --- |
+| Источник данных | Хранение исходных CSV Home Credit и подготовленных parquet | `data/raw/`, `data/processed/feature_store.parquet` |
+| Feature engineering | Полное построение фичей, кастомные трансформеры и справочные функции | `src/features/feature_engineering.py`, `src/features/custom_transformers.py`, `src/features/data_helpers.py` |
+| Пайплайны | Фабрика препроцессоров под каждую модель (категории, числовые признаки, бинарные флаги) | `src/pipelines/*.py`, функция `get_model_specific_pipeline` |
+| Тренеры | Реализация паттерна `BaseTrainer`: CV, обучение, метрики, сохранение | `src/models/trainer_interface.py`, `src/models/*_trainer.py`, `src/models/__init__.py` |
+| Конфигурации | Централизованные гиперпараметры и пути | `configs/*_config.py`, `src/config.py` |
+| Скрипты и отчеты | CLI для обучения, генерации конфигов, сравнения результатов | `scripts/train_model.py`, `scripts/feature_selection.py`, `src/reporting/compare_models.py` |
+| Сервинг | FastAPI для инференса обученных пайплайнов | `app/main.py`, `app/schemas.py` |
 
-Этот проект реализует полный, MLOps-ориентированный ML-пайплайн для бинарной классификации:
+Основной сценарий: исходные CSV переносятся в `data/raw/`, затем `src/features/feature_engineering.py` строит feature store (`data/processed/feature_store.parquet`). Скрипт `scripts/train_model.py` по имени модели извлекает соответствующий тренер из `MODEL_TRAINERS_REGISTRY`, собирает `Pipeline(preprocessor, model)`, выполняет обучающий цикл (с опциональным Stratified K-Fold), сохраняет пайплайн и метрики (`saved_models/`, `results/`).
 
-* **Расширенный Feature Engineering:** агрегация данных из 5+ источников с созданием сотен значимых признаков.  
-* **Архитектура "Trainer Pattern":** гибкая ООП-структура для инкапсуляции логики обучения и легкого добавления новых моделей.  
-* **Обучение и тюнинг:** сравнение **6 моделей** (включая CatBoost, XGBoost, SGD Classifier), протюненных для несбалансированной классификации.  
-* **Надежная оценка:** обязательная **Stratified K-Fold Cross-Validation** для подтверждения обобщающей способности (Generalization Score).
+## Структура репозитория
 
----
-
-## 2. Архитектура: принцип "Trainer Pattern"
-
-Ключевой элемент, обеспечивающий гибкость и надежность, — это **паттерн "Тренер"** (`BaseTrainer`).
-
-| Аспект | Описание |
-| :--- | :--- |
-| **Инкапсуляция** | `BaseTrainer` управляет всем циклом: загрузкой конфигов, CV, логированием, сохранением артефактов. |
-| **Специализация** | Дочерние классы (`CatBoostTrainer`, `XGBoostTrainer`) реализуют **только специфичную логику** (например, передачу `eval_set` или нативные механизмы обработки категориальных признаков). |
-| **Динамический конфиг** | Все гиперпараметры для всех **6 моделей** **динамически подтягиваются** из централизованных файлов в папке `configs/`, обеспечивая **полную воспроизводимость**. |
-
----
-
-## 3. Моделирование: битва ансамблей и линейной мощи
-
-Пайплайн использует мульти-модельный подход, где каждая модель протюнена для борьбы с дисбалансом классов (используется `class_weight` или `scale_pos_weight`).
-
-| Категория | Модели | Ключевой тюнинг и роль |
-| :--- | :--- | :--- |
-| **Бустинги (SOTA)** | `LightGBM`, `XGBoost`, `CatBoost` | **Максимальный ROC-AUC.** Используются нативные стратегии балансировки (`scale_pos_weight: 20`), `early_stopping` и тонкая настройка `learning_rate`. |
-| **Линейные** | `Logistic Regression`, `SGD Classifier` | **Скорость и интерпретируемость.** Настроены на `L1/L2` регуляризацию. Идеальны для проверки Feature Selection и **самого быстрого инференса** в production. |
-| **Ансамбль** | `Random Forest` | **Надежный бэйзлайн.** Тюнинг `max_depth` и `n_estimators` для сравнения с бустингами. |
-
----
-
-## 4. Установка и использование
-
-### 4.1. Требования
-
-Для запуска требуется **Python 3.9+** (рекомендовано).
-
-```bash
-# 1. создать виртуальное окружение
-python -m venv venv
-source venv/bin/activate  # для Linux/Mac
-
-# 2. установить зависимости
-make install
-# или
-pip install -r requirements.txt
-```
-
-### 4.2. Подготовка данных
-
-Поместите исходные CSV-файлы (application_train.csv, bureau.csv и т.д.) в директорию data/raw/.
-
-### 4.3. Команды для запуска (The Main Script)
-
-Основной цикл обучения и оценки управляется скриптом scripts/baseline_training.py.
-
-| Сценарий              | Команда                                                | Назначение                                                       |
-| :-------------------- | :----------------------------------------------------- | :--------------------------------------------------------------- |
-| Полный цикл           | `make all`                                             | Full pipeline: Feature Engineering + обучение всех моделей с CV. |
-| Полный бэйзлайн       | `python scripts/baseline_training.py`                  | Запускает все 6 моделей с 5-кратным CV.                          |
-| Быстрый тест          | `python scripts/baseline_training.py --no-cv`          | Запускает все 6 моделей, но пропускает CV.                       |
-| Фокусированный тюнинг | `python scripts/baseline_training.py catboost xgboost` | Обучение только указанных моделей.                               |
-
-# 5. Структура проекта
-```bash
+```text
 .
-├── Dockerfile
-├── EDA
-│   └── data_types.py
-├── Makefile
-├── README.md
-├── app
-│   ├── main.py
-│   └── schemas.py
-├── configs
-│   ├── __init__.py
-│   ├── catboost_config.py
-│   ├── lightgbm_config.py
-│   ├── processeed_features_config.py
-│   ├── raw_features_config.py
-│   ├── sklearn_config.py
-│   └── xgboost_config.py
-├── requirements.txt
-├── results
-│   ├── baseline_comparison.csv
-│   ├── catboost_metrics.joblib
-│   ├── lightgbm_metrics.joblib
-│   ├── logistic_regression_metrics.joblib
-│   ├── random_forest_metrics.joblib
-│   └── sgd_classifier_metrics.joblib
-├── scripts
-│   ├── __init__.py
-│   ├── feature_selection.py
-│   ├── generate_features_config.py
-│   └── train_model.py
-├── src
-│   ├── __init__.py
-│   ├── config.py
-│   ├── features
-│   │   ├── __init__.py
-│   │   ├── custom_transformers.py
-│   │   ├── data_helpers.py
-│   │   └── feature_engineering.py
-│   ├── models
-│   │   ├── __init__.py
-│   │   ├── catboost_trainer.py
-│   │   ├── lightgbm_trainer.py
-│   │   ├── sklearn_trainer.py
-│   │   ├── torch_models
-│   │   ├── trainer_interface.py
-│   │   └── xgboost_trainer.py
-│   ├── pipelines
-│   │   ├── __init__.py
-│   │   ├── base_pipeline.py
-│   │   ├── base_preprocessor.py
-│   │   ├── catboost_pipeline.py
-│   │   ├── lightgbm_pipeline.py
-│   │   ├── sklearn_pipeline.py
-│   │   └── xgboost_pipeline.py
-│   └── reporting
-│       ├── __init__.py
-│       └── compare_models.py
-└── tests
-
-17 directories, 52 files
+├── app/                 # FastAPI сервис для инференса
+├── configs/             # Гиперпараметры для всех моделей
+├── data/                # raw CSV и feature store
+├── docker-compose.yaml  # docker-compose сценарий (обучение в контейнере)
+├── Dockerfile           # Базовый образ Python 3.11 с запуском train_model.py
+├── Makefile             # Автоматизация (features, train, lint, docker)
+├── scripts/             # CLI-инструменты (train_model.py, generate_features_config.py, ...)
+├── src/                 # Основная библиотека: features, pipelines, models, reporting
+├── saved_models/        # Сохраненные пайплайны (joblib)
+├── results/             # Метрики CV/Test и сравнение моделей
+└── app/                 # FastAPI приложение (инференс)
 ```
 
-# 6. Feature Engineering (сложные признаки)
+## Требования и подготовка данных
 
-- Проект создает более 400 признаков, используя агрегацию данных из нескольких источников.
+1. Python 3.9+ (Docker-образ собирается на Python 3.11).
+2. Исходные CSV из датасета Home Credit должны быть скопированы в `data/raw/` (минимум `application_train.csv`; для расширенного feature engineering — остальные CSV из каталога `data/raw/`).
+3. Структура каталогов создается автоматически командой `make setup` (создаст `data`, `saved_models`, `results`, `logs`).
 
-- Агрегированные признаки: статистики (среднее, минимум, максимум) по Bureau, Bureau Balance и Previous Application.
+## Локальный запуск (без Docker)
 
-- Расчетные признаки: отношения между ключевыми переменными (CREDIT_INCOME_RATIO, ANNUITY_INCOME_RATIO).
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 
-- Обработка аномалий: явное выделение аномальных значений (например, DAYS_EMPLOYED_ANOM).
+# Проверить наличие исходных данных
+make data
 
-# 7. Логирование, артефакты и качество
-- Логирование
+# Построить feature store (data/processed/feature_store.parquet)
+make features
 
-- Вся ключевая информация (загруженные параметры, CV-скоры, метрики Train/Test) логируется через стандартный модуль logging.
+# Обучить все зарегистрированные модели с CV
+make train
 
-### Сохранение артефактов
+# Примеры параметров
+make train MODEL=catboost          # только CatBoost-тренер
+make train NO_CV=1                 # ускоренное обучение без кросс-валидации
+python scripts/train_model.py catboost simple_mlp --no-cv --no-compare
+```
 
-- saved_models/ — полный пайплайн (препроцессор + модель) для production.
+Результаты обучения записываются в `saved_models/{model}_pipeline.joblib` и `results/{model}_metrics.joblib`. Итоговая сводка ROC-AUC и других метрик сохраняется в `results/baseline_comparison.csv`.
 
-- results/ — метрики, CV-скоры, итоговая таблица сравнения моделей.
+## Архитектурные детали тренеров
+
+- `BaseTrainer` (см. `src/models/trainer_interface.py`) отвечает за загрузку параметров из `MODEL_PARAMS`, подготовку `Pipeline`, Stratified K-Fold, расчет метрик, извлечение feature importance и сохранение артефактов.
+- Конкретные тренеры (`CatBoostTrainer`, `LGBMTrainer`, `SklearnTrainer`, `PyTorchTrainer`) реализуют `_get_model()` и доп. fit-аргументы (eval_set, class_weight и т.д.).
+- `get_model_specific_pipeline()` (в `src/pipelines/__init__.py`) возвращает подходящий `ColumnTransformer` с учетом типа модели (например, CatBoost не требует полного OHE).
+- Hyperparameters определяются в `configs/*_config.py` и агрегируются в `MODEL_PARAMS` (`src/config.py`).
+
+## Команды Makefile
+
+| Команда | Описание |
+| --- | --- |
+| `make setup` | Создает структуру каталогов и устанавливает зависимости (совместно с `make install`). |
+| `make features` | Запускает `python -m src.features.feature_engineering`, создает/обновляет feature store. |
+| `make train [MODEL=<name>] [NO_CV=1]` | Обучает модели через `scripts.train_model` (по умолчанию все из `MODEL_TRAINERS_REGISTRY`). |
+| `make all` | Полный цикл: очистка, feature engineering, обучение. |
+| `make clean` | Удаляет кэш, обработанные данные, сохраненные модели/результаты. |
+| `make docker-build`, `make docker-run` | Сборка и запуск контейнера вручную. |
+| `make run-api` | Запуск FastAPI сервера для инференса (требует предварительно обученной модели). |
+
+## Запуск в Docker
+
+### Вариант 1. Docker CLI
+
+```bash
+# Сборка образа
+docker build -t credit-default-ml .
+
+# Запуск обучения (по умолчанию train_model.py --no-cv)
+docker run --rm \
+  -v "$(pwd)/data":/app/data \
+  -v "$(pwd)/results":/app/results \
+  -v "$(pwd)/saved_models":/app/saved_models \
+  credit-default-ml
+```
+
+Контейнер использует `CMD ["python", "-u", "scripts/train_model.py", "--no-cv"]`. При необходимости можно переопределить команду, например: `docker run ... credit-default-ml python scripts/train_model.py catboost`.
+
+### Вариант 2. docker-compose
+
+`docker-compose.yaml` описывает сервис `ml_trainer`:
+
+```bash
+docker compose up --build
+```
+
+Volumes монтируют каталоги `data`, `results`, `configs`, поэтому модельные артефакты и feature store остаются на хосте. Для повторного обучения достаточно обновить конфиги, перезапустить `docker compose up --build`.
+
+## FastAPI инференс
+
+После обучения нужной модели:
+
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Эндпоинт `/predict` принимает структуру из `app/schemas.py`. Перед запуском убедитесь, что `saved_models/<model>_pipeline.joblib` доступен сервису (или задайте переменные окружения, если модифицируете app/main.py).
+
+## Логи и артефакты
+
+- Feature engineering пишет промежуточные логи через стандартный `logging` и формирует `data/processed/feature_store.parquet`.
+- Обучение фиксирует параметры, ROC-AUC и конфьюжн-матрицы; результаты доступны в `results/*.joblib` и `results/baseline_comparison.csv`.
+- `BaseTrainer.save_model` гарантирует согласованность между пайплайном и метриками; загрузить обученную модель можно через `BaseTrainer.load_model(model_name)`.
+
+## Дополнительные материалы
+
+- `EDA/` — ноутбуки с исследованием категориальных и числовых признаков.
+- `scripts/feature_selection.py` — вспомогательный скрипт для отбора признаков.
+- `src/reporting/compare_models.py` — генерация сравнительных таблиц и визуализаций.
+
+Все изменения архитектуры (новые модели, иные фичи) рекомендуется вносить через обновление соответствующих тренеров и конфигов, чтобы сохранить совместимость с единым CLI и Docker-пайплайном.
