@@ -7,15 +7,9 @@ from sklearn.model_selection import KFold
 
 from src.config import SEED
 
+
 class CVTargetEncoder(BaseEstimator, TransformerMixin):
-    """
-    CV-safe target encoder. During fit(X, y) computes out-of-fold encoded values
-    and stores full-data mappings for transform. For transform, unseen categories
-    fallback to global target mean.
-    Parameters:
-    - n_splits: folds for OOF encoding
-    - cols: optional list of columns to encode (if None, use all object/categorical)
-    """
+    """CV-safe target encoder. Computes OOF encoded values during fit, stores mappings for transform."""
 
     def __init__(self, n_splits: int = 5, random_state: Optional[int] = None, cols: Optional[List[str]] = None):
         self.n_splits = max(2, int(n_splits))
@@ -29,10 +23,10 @@ class CVTargetEncoder(BaseEstimator, TransformerMixin):
         y = pd.Series(y).reset_index(drop=True)
         if X.shape[0] == 0:
             raise ValueError("CVTargetEncoder received empty X in fit")
+
         self.global_mean_ = float(y.mean())
         cols = self.cols or X.select_dtypes(include=['object', 'category']).columns.tolist()
         if not cols:
-            # nothing to encode
             self.oof_df_ = pd.DataFrame(index=X.index)
             return self
 
@@ -45,14 +39,12 @@ class CVTargetEncoder(BaseEstimator, TransformerMixin):
             X_tr = X.iloc[train_idx]
             X_val = X.iloc[val_idx]
             for c in cols:
-                # handle NaNs by treating them as a category
                 tr_series = X_tr[c].fillna('__NA__')
                 val_series = X_val[c].fillna('__NA__')
                 tr_means = y_tr.groupby(tr_series).mean()
                 oof_vals = val_series.map(tr_means).fillna(self.global_mean_).values
                 oof_encoded[c][val_idx] = oof_vals
 
-        # store full-data mapping (fillna key for NaNs)
         for c in cols:
             full_series = X[c].fillna('__NA__')
             full_map = y.groupby(full_series).mean().to_dict()

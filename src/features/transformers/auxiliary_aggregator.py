@@ -8,24 +8,13 @@ from . import logger
 
 
 class AuxiliaryFeatureAggregator(BaseEstimator, TransformerMixin):
-    """
-    Трансформер для агрегации данных из вспомогательных таблиц
-    (Bureau, Previous Applications и т.д.) на уровень клиента (SK_ID_CURR).
-
-    Fit: Предвычисляет агрегации на train данных.
-    Transform: Применяет сохраненные агрегации через merge.
-    """
+    """Агрегирует данные из вспомогательных таблиц на уровень клиента (SK_ID_CURR)."""
 
     def __init__(self, aux_data: Optional[Dict[str, pd.DataFrame]] = None):
-        """
-        :param aux_data: Словарь вспомогательных датафреймов.
-                         Пример: {'bureau': df_bureau, 'bureau_balance': df_bb, ...}
-        """
         self._fitted_stats = None
         self.aux_data = aux_data or {}
         self.bureau_agg_ = None
         self.prev_agg_ = None
-        # list of aggregation functions used for numeric columns
         self.agg_funcs = ['mean', 'max', 'min', 'sum', 'std', self._q25, self._q75]
 
     @staticmethod
@@ -53,77 +42,39 @@ class AuxiliaryFeatureAggregator(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """
-        Применяет предвычисленные агрегации через merge.
-        """
+        """Применяет предвычисленные агрегации через merge."""
         if not isinstance(X, pd.DataFrame):
             X = pd.DataFrame(X)
         X_out = X.copy()
 
-        # --- финальное слияние ---
         if self.bureau_agg_ is not None and not self.bureau_agg_.empty:
             X_out = X_out.merge(self.bureau_agg_, on='SK_ID_CURR', how='left')
-            logger.debug(f"Merged Bureau features. Shape: {X_out.shape}")
 
         if self.prev_agg_ is not None and not self.prev_agg_.empty:
             X_out = X_out.merge(self.prev_agg_, on='SK_ID_CURR', how='left')
-            logger.debug(f"Merged Previous App features. Shape: {X_out.shape}")
 
         return X_out
 
-    # --- внутренние методы агрегации ---
-
     @staticmethod
     def _aggregate_bureau_balance(df_bb: pd.DataFrame) -> pd.DataFrame:
-        """
-        Агрегирует ежемесячные статусы просрочки из bureau_balance на уровень
-        каждого предыдущего кредита (SK_ID_BUREAU).
-
-        :param df_bb: Bureau Balance DataFrame
-        :return: aggregated Bureau Balance DataFrame
-        """
-        logger.debug("Aggregating Bureau Balance features...")
-
-        # проверка на пустой датафрейм
+        """Агрегирует статусы просрочки из bureau_balance на уровень SK_ID_BUREAU."""
         if df_bb.empty:
-            logger.warning("Bureau Balance DataFrame is empty")
             return pd.DataFrame()
 
-        try:
-            # --- 1 считаем частоту каждого статуса просрочки
-            df_bb_agg = (
-                df_bb
-                .groupby('SK_ID_BUREAU')['STATUS']
-                .value_counts(normalize=True)
-                .unstack(fill_value=0)
-            )
+        df_bb_agg = (
+            df_bb
+            .groupby('SK_ID_BUREAU')['STATUS']
+            .value_counts(normalize=True)
+            .unstack(fill_value=0)
+        )
+        df_bb_agg.columns = [f'BB_STATUS_PCT_{col}' for col in df_bb_agg.columns]
+        df_bb_agg['BB_HISTORY_LENGTH'] = df_bb.groupby('SK_ID_BUREAU').size()
 
-            # --- 2 переименовываем колонки
-            df_bb_agg.columns = [f'BB_STATUS_PCT_{col}' for col in df_bb_agg.columns]
-
-            # --- 3 добавляем длину кредитной истории
-            df_bb_agg['BB_HISTORY_LENGTH'] = df_bb.groupby('SK_ID_BUREAU').size()
-
-            logger.debug(f"Bureau Balance features created. Shape: {df_bb_agg.shape}")
-            return df_bb_agg.reset_index()
-
-        except Exception as e:
-            logger.error(f"Error aggregating Bureau Balance: {e}", exc_info=True)
-            raise
+        return df_bb_agg.reset_index()
 
     def _aggregate_bureau(self, df_bureau: pd.DataFrame, df_bb_agg: pd.DataFrame) -> pd.DataFrame:
-        """
-        Агрегирует ежемесячные статусы просрочки из bureau_balance на уровень
-        каждого предыдущего кредита (SK_ID_BUREAU).
-
-        :param df_bureau: Bureau Balance DataFrame
-        :return: aggregated Bureau Balance DataFrame
-        """
-        logger.debug("Aggregating Bureau Balance features...")
-
-        # проверка на пустой датафрейм
+        """Агрегирует данные Bureau на уровень клиента."""
         if df_bureau.empty:
-            logger.warning("Bureau Balance DataFrame is empty")
             return pd.DataFrame()
 
         if not df_bb_agg.empty:
@@ -134,22 +85,18 @@ class AuxiliaryFeatureAggregator(BaseEstimator, TransformerMixin):
             if c not in ['SK_ID_CURR', 'SK_ID_BUREAU']
         ]
 
-        # Add percentiles + std
         agg_dict = {col: self.agg_funcs for col in num_cols}
         agg_dict['SK_ID_BUREAU'] = ['count']
 
         df_agg = df_bureau.groupby('SK_ID_CURR').agg(agg_dict)
 
-        # Rename columns
         new_cols = []
         for col in df_agg.columns:
             col_name, func = col[0], col[1]
             if col_name == 'SK_ID_BUREAU':
-                # count of bureau records per customer
                 new_cols.append('BUREAU_CREDIT_COUNT')
                 continue
 
-            # determine function label
             if isinstance(func, str):
                 func_label = func.upper()
             elif callable(func):
@@ -170,39 +117,23 @@ class AuxiliaryFeatureAggregator(BaseEstimator, TransformerMixin):
 
     @staticmethod
     def _aggregate_previous_application(df_prev: pd.DataFrame) -> pd.DataFrame:
-        """
-        Агрегирует данные о предыдущих заявках на уровень клиента.
-
-        :param df_prev: Previous Application DataFrame
-        :return: Aggregated Previous Application features
-        """
-        logger.debug("Aggregating Previous Application features...")
-
+        """Агрегирует данные о предыдущих заявках на уровень клиента."""
         if df_prev.empty:
-            logger.warning("Previous Application DataFrame is empty")
             return pd.DataFrame()
 
-        try:
-            # выбираем числовые колонки
-            num_cols = df_prev.select_dtypes(include=[np.number]).columns.tolist()
-            num_cols = [col for col in num_cols if col not in ['SK_ID_CURR', 'SK_ID_PREV']]
+        num_cols = df_prev.select_dtypes(include=[np.number]).columns.tolist()
+        num_cols = [col for col in num_cols if col not in ['SK_ID_CURR', 'SK_ID_PREV']]
 
-            agg_funcs = ['mean', 'max', 'min', 'sum']
-            agg_dict = {col: agg_funcs for col in num_cols}
-            agg_dict['SK_ID_PREV'] = ['count']
+        agg_funcs = ['mean', 'max', 'min', 'sum']
+        agg_dict = {col: agg_funcs for col in num_cols}
+        agg_dict['SK_ID_PREV'] = ['count']
 
-            df_prev_agg = df_prev.groupby('SK_ID_CURR').agg(agg_dict)
+        df_prev_agg = df_prev.groupby('SK_ID_CURR').agg(agg_dict)
 
-            df_prev_agg.columns = [
-                f'PREV_{col[0]}_{col[1].upper()}' if col[0] != 'SK_ID_PREV'
-                else 'PREV_APPLICATION_COUNT'
-                for col in df_prev_agg.columns
-            ]
+        df_prev_agg.columns = [
+            f'PREV_{col[0]}_{col[1].upper()}' if col[0] != 'SK_ID_PREV'
+            else 'PREV_APPLICATION_COUNT'
+            for col in df_prev_agg.columns
+        ]
 
-            logger.debug(f"Previous Application aggregation complete. Created {len(df_prev_agg.columns)} features")
-
-            return df_prev_agg.reset_index()
-
-        except Exception as e:
-            logger.error(f"Error aggregating Previous Application: {e}", exc_info=True)
-            raise
+        return df_prev_agg.reset_index()
