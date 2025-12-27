@@ -45,7 +45,7 @@ def run_feature_selection(model_pipeline, X_data, y_data, threshold: float):
     )
 
     # 2. извлечение компонентов
-    # 'preprocessor' - это внешний Pipeline, содержащий AnomalyHandler, FeatureCreator, ColumnTransformer
+    # 'preprocessor' - Pipeline с DataFrameCoercer, FeatureCreator, ColumnTransformer
     full_preprocessor_pipeline = model_pipeline.named_steps['preprocessor']
 
     column_transformer = full_preprocessor_pipeline.named_steps['preprocessor']
@@ -97,8 +97,6 @@ def run_feature_selection(model_pipeline, X_data, y_data, threshold: float):
 
 
 if __name__ == '__main__':
-
-
     X_data, y_data = load_full_data()
     model_pipeline = load_pipeline()
 
